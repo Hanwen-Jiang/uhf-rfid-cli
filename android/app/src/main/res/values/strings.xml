@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">UHF RFID</string>
+    <string name="connect">连接</string>
+    <string name="disconnect">断开</string>
+    <string name="read">读 EPC/TID</string>
+    <string name="write">写入 EPC / TID</string>
+    <string name="antenna">天线口</string>
+    <string name="power">功率</string>
+    <string name="restart">连接后复位</string>
+    <string name="mute">关蜂鸣器</string>
+    <string name="not_connected">未连接。插上 OTG 线后点「连接」。</string>
+    <string name="epc">EPC</string>
+    <string name="tid">TID</string>
+    <string name="write_section">写入（对应原 GUI 6C 读写标签页：访问密码 00000000，EPC 起始字 2，TID 起始字 0）</string>
+    <string name="epc_hint">EPC（Hex，12 字节）</string>
+    <string name="tid_hint">TID（Hex，12 字节）</string>
+    <string name="write_note">写 TID 需要标签支持：多数 Gen2 标签的 TID 是只读的，写了不会有变化（读写器会接受命令）。要写可改的存储区，用 USER 区（bank 3）。</string>
+    <string name="raw_log">原始报文</string>
+</resources>

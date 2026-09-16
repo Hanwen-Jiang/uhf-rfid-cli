@@ -163,7 +163,23 @@ python re/test_real_frame.py  # 真机帧逐字节校验
 
 ---
 
-## 移植到手机
+## 手机
+
+| | Android | iOS |
+|---|---|---|
+| **USB-OTG 串口直连** | ✅ 已实现，见 [`android/`](android/) | ❌ 系统不开放，要 MFi 认证芯片 |
+| TCP（读写器带网口/WiFi） | ✅ | ✅ |
+| BLE 串口模块 | ✅ | ✅ |
+
+**Android 已经做好可以直接装**：`android/` 里是一个完整的 Android 工程，
+手机插 OTG 线就能读/写标签，协议和电脑端完全一样。
+已实际编译出 APK（5.6 MB），编译和用法见 [`android/README.md`](android/README.md)。
+
+**iOS 只能走 BLE 或网络**，原因和方案见 [`ios/README.md`](ios/README.md)。
+
+---
+
+## 移植到手机（协议层）
 
 协议本身与传输无关，串口 / HID / TCP 三种传输用的是**完全相同**的帧。
 原程序里的 TCP 默认是 `<读写器>:8080`（`tcp_port` 全局变量），
@@ -173,7 +189,9 @@ python re/test_real_frame.py  # 真机帧逐字节校验
 python3 rfidctl.py --tcp 192.168.0.178:8080 info
 ```
 
-`re/rfidframe.py` 只用标准库，可以直接照着移植成 Java/Kotlin/Swift。
+协议核心可以直接照搬：Python 版是 `re/rfidframe.py`（纯标准库），
+Java 版是 `android/app/src/main/java/com/hanwenjiang/uhfrfid/RfidFrame.java`
+（同样是纯语言标准库，不依赖 Android），两边有 26 项逐字节比对的自测。
 
 ---
 

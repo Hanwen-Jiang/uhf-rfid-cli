@@ -1,0 +1,4 @@
+// 顶层构建文件。仓库统一在 settings.gradle 里声明，插件版本在这里声明。
+plugins {
+    id 'com.android.application' version '8.13.2' apply false
+}
