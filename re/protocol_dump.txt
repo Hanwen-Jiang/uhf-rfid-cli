@@ -1,0 +1,425 @@
+==========================================================================================
+LibWinUart  (UART / HID transport)
+==========================================================================================
+
+  cmd=0x42   frame_len=?     GB secure write          _ZN10LibWinUart14RFID_GbSeWriteEhttPcj
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+        payload[ 1] -> frame[ 5] = arg6[2]
+        payload[ 2] -> frame[ 6] = arg6[1]
+        payload[ 3] -> frame[ 7] = arg6[0]
+        payload[ 4] -> frame[ 8] = arg1[0]
+        payload[ 5] -> frame[ 9] = arg2[1]
+        payload[ 6] -> frame[10] = arg2[0]
+        payload[ 7] -> frame[11] = arg3[1]
+        payload[ 8] -> frame[12] = arg3[0]
+
+  cmd=0x43   frame_len=12    GB secure read           _ZN10LibWinUart13RFID_GbSeReadEhttj
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[1]
+        payload[ 2] -> frame[ 6] = arg2[0]
+        payload[ 3] -> frame[ 7] = arg3[1]
+        payload[ 4] -> frame[ 8] = arg3[0]
+        payload[ 5] -> frame[ 9] = arg5[3]
+        payload[ 6] -> frame[10] = arg5[2]
+        payload[ 7] -> frame[11] = arg5[1]
+        payload[ 8] -> frame[12] = arg5[0]
+
+  cmd=0x45   frame_len=12    GB/T29768 read           _ZN10LibWinUart11RFID_GbReadEhttj
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[1]
+        payload[ 2] -> frame[ 6] = arg2[0]
+        payload[ 3] -> frame[ 7] = arg3[1]
+        payload[ 4] -> frame[ 8] = arg3[0]
+        payload[ 5] -> frame[ 9] = arg5[3]
+        payload[ 6] -> frame[10] = arg5[2]
+        payload[ 7] -> frame[11] = arg5[1]
+        payload[ 8] -> frame[12] = arg5[0]
+
+  cmd=0x46   frame_len=?     GB/T29768 write          _ZN10LibWinUart12RFID_GbWriteEhttPcj
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+        payload[ 1] -> frame[ 5] = arg6[2]
+        payload[ 2] -> frame[ 6] = arg6[1]
+        payload[ 3] -> frame[ 7] = arg6[0]
+        payload[ 4] -> frame[ 8] = arg1[0]
+        payload[ 5] -> frame[ 9] = arg2[1]
+        payload[ 6] -> frame[10] = arg2[0]
+        payload[ 7] -> frame[11] = arg3[1]
+        payload[ 8] -> frame[12] = arg3[0]
+
+  cmd=0x47   frame_len=9     GB/T29768 lock           _ZN10LibWinUart11RFID_GbLockEhhj
+        payload[ 0] -> frame[ 4] = arg3[3]
+        payload[ 1] -> frame[ 5] = arg3[2]
+        payload[ 2] -> frame[ 6] = arg3[1]
+        payload[ 3] -> frame[ 7] = arg3[0]
+        payload[ 4] -> frame[ 8] = arg1[0]
+        payload[ 5] -> frame[ 9] = arg2[0]
+
+  cmd=0x49   frame_len=7     GB/T29768 kill           _ZN10LibWinUart11RFID_GbKillEj
+        payload[ 0] -> frame[ 4] = arg1[3]
+        payload[ 1] -> frame[ 5] = arg1[2]
+        payload[ 2] -> frame[ 6] = arg1[1]
+        payload[ 3] -> frame[ 7] = arg1[0]
+
+  cmd=0x4A   frame_len=3     save params              _ZN10LibWinUart9SaveParamEv
+
+  cmd=0x4B   frame_len=3     factory reset            _ZN10LibWinUart10Reset_ParaEv
+
+  cmd=0x4C   frame_len=?     app fw upgrade           _ZN10LibWinUart18Reader_App_UpgradeEjhPht
+        payload[ 0] -> frame[ 4] = arg5[0]
+
+  cmd=0x4D   frame_len=?     baseband upgrade         _ZN10LibWinUart25Baseband_Firmware_UpgradeEjhPht
+        payload[ 0] -> frame[ 4] = arg5[0]
+
+  cmd=0x50   frame_len=3     get fast-EPC             _ZN10LibWinUart12Get_Fast_EpcEv
+
+  cmd=0x51   frame_len=4     set fast-EPC             _ZN10LibWinUart12Set_Fast_EpcEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x5E   frame_len=11    set 8-ant power          _ZN10LibWinUart19Set_Eight_Ant_powerEhhhhhhhh
+
+  cmd=0x5F   frame_len=7     set 4-ant power          _ZN10LibWinUart19Set_Multi_Ant_powerEhhhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[0]
+        payload[ 2] -> frame[ 6] = arg3[0]
+        payload[ 3] -> frame[ 7] = arg5[0]
+
+  cmd=0x60   frame_len=3     read GPIO                _ZN10LibWinUart15Read_Gpio_ValueEh
+
+  cmd=0x61   frame_len=5     set GPIO                 _ZN10LibWinUart14Set_Gpio_ValueEhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = -- (uninitialised)
+
+  cmd=0x69   frame_len=4     set RF link param        _ZN10LibWinUart11Set_RF_LinkEh
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+
+  cmd=0x6A   frame_len=3     get RF link param        _ZN10LibWinUart11Get_RF_LinkEv
+
+  cmd=0x70   frame_len=3     restart reader           _ZN10LibWinUart14Restart_ReaderEv
+
+  cmd=0x71   frame_len=4     set uart baudrate        _ZN10LibWinUart18Set_Uart_BoundRateEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x72   frame_len=3     read firmware version    _ZN10LibWinUart22Read_Frameware_versionEv
+
+  cmd=0x73   frame_len=4     set RS485 addr           _ZN10LibWinUart14Set_RS485_AddrEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x74   frame_len=4     set work antenna         _ZN10LibWinUart12Set_Work_AntEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x75   frame_len=3     get work antenna         _ZN10LibWinUart12Get_Work_AntEv
+
+  cmd=0x76   frame_len=4     set ant power            _ZN10LibWinUart13Set_Ant_powerEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x77   frame_len=3     get ant power            _ZN10LibWinUart13Get_Ant_PowerEv
+
+  cmd=0x78   frame_len=6     set freq standard        _ZN10LibWinUart21Set_Frequece_StandardEhhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[0]
+        payload[ 2] -> frame[ 6] = arg3[0]
+
+  cmd=0x78   frame_len=10    set frequency            _ZN10LibWinUart12Set_FrequeceEjth
+        payload[ 0] -> frame[ 4] = 4[0]
+        payload[ 1] -> frame[ 5] = -- (uninitialised)
+        payload[ 2] -> frame[ 6] = arg2[0]
+        payload[ 3] -> frame[ 7] = arg3[0]
+        payload[ 4] -> frame[ 8] = arg1[2]
+        payload[ 5] -> frame[ 9] = arg1[1]
+        payload[ 6] -> frame[10] = arg1[0]
+
+  cmd=0x79   frame_len=3     get frequency            _ZN10LibWinUart13Get_FrequenceEv
+
+  cmd=0x7A   frame_len=4     set beeper               _ZN10LibWinUart15Set_Beep_statusEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x7B   frame_len=3     read temp                _ZN10LibWinUart14Read_Work_TempEv
+
+  cmd=0x80   frame_len=4     buffered inventory       _ZN10LibWinUart20Start_Buff_InventoryEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x81   frame_len=14    ISO18000-6C read         _ZN10LibWinUart9RFID_ReadEhjtj
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[3]
+        payload[ 2] -> frame[ 6] = arg2[2]
+        payload[ 3] -> frame[ 7] = arg2[1]
+        payload[ 4] -> frame[ 8] = arg2[0]
+        payload[ 5] -> frame[ 9] = arg3[1]
+        payload[ 6] -> frame[10] = arg3[0]
+        payload[ 7] -> frame[11] = arg5[3]
+        payload[ 8] -> frame[12] = arg5[2]
+        payload[ 9] -> frame[13] = arg5[1]
+        payload[10] -> frame[14] = arg5[0]
+
+  cmd=0x82   frame_len=?     ISO18000-6C write        _ZN10LibWinUart10RFID_WriteEhjtPcj
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+        payload[ 1] -> frame[ 5] = arg6[2]
+        payload[ 2] -> frame[ 6] = arg6[1]
+        payload[ 3] -> frame[ 7] = arg6[0]
+        payload[ 4] -> frame[ 8] = arg1[0]
+        payload[ 5] -> frame[ 9] = arg2[3]
+        payload[ 6] -> frame[10] = arg2[2]
+        payload[ 7] -> frame[11] = arg2[1]
+        payload[ 8] -> frame[12] = arg2[0]
+        payload[ 9] -> frame[13] = arg3[1]
+        payload[10] -> frame[14] = arg3[0]
+
+  cmd=0x83   frame_len=9     ISO18000-6C lock         _ZN10LibWinUart9RFID_LockEhhj
+        payload[ 0] -> frame[ 4] = arg3[3]
+        payload[ 1] -> frame[ 5] = arg3[2]
+        payload[ 2] -> frame[ 6] = arg3[1]
+        payload[ 3] -> frame[ 7] = arg3[0]
+        payload[ 4] -> frame[ 8] = arg1[0]
+        payload[ 5] -> frame[ 9] = arg2[0]
+
+  cmd=0x84   frame_len=7     ISO18000-6C kill         _ZN10LibWinUart9RFID_KillEj
+        payload[ 0] -> frame[ 4] = arg1[3]
+        payload[ 1] -> frame[ 5] = arg1[2]
+        payload[ 2] -> frame[ 6] = arg1[1]
+        payload[ 3] -> frame[ 7] = arg1[0]
+
+  cmd=0x85   frame_len=?     set EPC match            _ZN10LibWinUart13Set_Epc_MatchEhPc
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+        payload[ 1] -> frame[ 5] = -- (uninitialised)
+
+  cmd=0x86   frame_len=3     get EPC match            _ZN10LibWinUart13Get_Epc_MatchEv
+
+  cmd=0x87   frame_len=?     switch-ant inventory     _ZN10LibWinUart20Switch_Ant_InventoryEhPhS0_hhhh
+        payload[ 0] -> frame[ 4] = arg8[0]
+
+  cmd=0x89   frame_len=4     realtime inventory       _ZN10LibWinUart18RealTime_InventoryEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x8A   frame_len=7     custom inventory         _ZN10LibWinUart16Custom_InventoryEhhhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[0]
+        payload[ 2] -> frame[ 6] = arg3[0]
+        payload[ 3] -> frame[ 7] = arg5[0]
+
+  cmd=0x8B   frame_len=6     custom session inv       _ZN10LibWinUart24Custom_Session_InventoryEhhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[0]
+        payload[ 2] -> frame[ 6] = arg3[0]
+
+  cmd=0x8C   frame_len=3     stop inventory           _ZN10LibWinUart14Stop_InventoryEv
+
+  cmd=0x90   frame_len=3     get tag buffer           _ZN10LibWinUart12Get_Tag_BuffEv
+
+  cmd=0x91   frame_len=3     get+clear tag buffer     _ZN10LibWinUart18Get_and_Clear_BuffEv
+
+  cmd=0x92   frame_len=3     get tag count            _ZN10LibWinUart11Get_Tag_NumEv
+
+  cmd=0x93   frame_len=3     clear tag buffer         _ZN10LibWinUart14Clear_Tag_BuffEv
+
+  cmd=0x98   frame_len=19    GB double identify       _ZN10LibWinUart21RFID_GbDoubleIdentifyEPc
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+
+  cmd=??     frame_len=?                              _ZN10LibWinUartC2Ev
+        payload[ 0] -> frame[ 4] = 0[0]
+
+  cmd=??     frame_len=?     uart monitor passthrough _ZN10LibWinUart17Uart_Moniter_SendEPch
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+
+  cmd=??     frame_len=?                              _ZN10LibWinUart15remove_err_dataEhh
+        payload[ 0] -> frame[ 4] = this+0x471
+
+  cmd=??     frame_len=?                              _ZN10LibWinUart11GetUartDataEv
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+
+  cmd=??     frame_len=?                              _ZN10LibWinUart14set_rs485_addrEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+==========================================================================================
+tcp_client (TCP transport)
+==========================================================================================
+
+  cmd=0x45   frame_len=12    GB/T29768 read           _ZN10tcp_client11RFID_GbReadEhttj
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[1]
+        payload[ 2] -> frame[ 6] = arg2[0]
+        payload[ 3] -> frame[ 7] = arg3[1]
+        payload[ 4] -> frame[ 8] = arg3[0]
+        payload[ 5] -> frame[ 9] = arg5[3]
+        payload[ 6] -> frame[10] = arg5[2]
+        payload[ 7] -> frame[11] = arg5[1]
+        payload[ 8] -> frame[12] = arg5[0]
+
+  cmd=0x46   frame_len=?     GB/T29768 write          _ZN10tcp_client12RFID_GbWriteEhttPcj
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+        payload[ 1] -> frame[ 5] = arg6[2]
+        payload[ 2] -> frame[ 6] = arg6[1]
+        payload[ 3] -> frame[ 7] = arg6[0]
+        payload[ 4] -> frame[ 8] = arg1[0]
+        payload[ 5] -> frame[ 9] = arg2[1]
+        payload[ 6] -> frame[10] = arg2[0]
+        payload[ 7] -> frame[11] = arg3[1]
+        payload[ 8] -> frame[12] = arg3[0]
+
+  cmd=0x47   frame_len=9     GB/T29768 lock           _ZN10tcp_client11RFID_GbLockEhhj
+        payload[ 0] -> frame[ 4] = arg3[3]
+        payload[ 1] -> frame[ 5] = arg3[2]
+        payload[ 2] -> frame[ 6] = arg3[1]
+        payload[ 3] -> frame[ 7] = arg3[0]
+        payload[ 4] -> frame[ 8] = arg1[0]
+        payload[ 5] -> frame[ 9] = arg2[0]
+
+  cmd=0x49   frame_len=7     GB/T29768 kill           _ZN10tcp_client11RFID_GbKillEj
+        payload[ 0] -> frame[ 4] = arg1[3]
+        payload[ 1] -> frame[ 5] = arg1[2]
+        payload[ 2] -> frame[ 6] = arg1[1]
+        payload[ 3] -> frame[ 7] = arg1[0]
+
+  cmd=0x4A   frame_len=3     save params              _ZN10tcp_client10Save_ParamEv
+
+  cmd=0x4B   frame_len=3     factory reset            _ZN10tcp_client10Reset_ParaEv
+
+  cmd=0x4C   frame_len=?     app fw upgrade           _ZN10tcp_client18Reader_App_UpgradeEjhPht
+        payload[ 0] -> frame[ 4] = arg5[0]
+
+  cmd=0x4D   frame_len=?     baseband upgrade         _ZN10tcp_client25Baseband_Firmware_UpgradeEjhPht
+        payload[ 0] -> frame[ 4] = arg5[0]
+
+  cmd=0x50   frame_len=3     get fast-EPC             _ZN10tcp_client12Get_Fast_EpcEv
+
+  cmd=0x51   frame_len=4     set fast-EPC             _ZN10tcp_client12Set_Fast_EpcEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x60   frame_len=3     read GPIO                _ZN10tcp_client15Read_Gpio_ValueEh
+
+  cmd=0x61   frame_len=5     set GPIO                 _ZN10tcp_client14Set_Gpio_ValueEhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = -- (uninitialised)
+
+  cmd=0x69   frame_len=4     set RF link param        _ZN10tcp_client11Set_RF_LinkEh
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+
+  cmd=0x6A   frame_len=3     get RF link param        _ZN10tcp_client11Get_RF_LinkEv
+
+  cmd=0x70   frame_len=3     restart reader           _ZN10tcp_client14Restart_ReaderEv
+
+  cmd=0x72   frame_len=3     read firmware version    _ZN10tcp_client22Read_Frameware_versionEv
+
+  cmd=0x73   frame_len=4     set RS485 addr           _ZN10tcp_client14Set_RS485_AddrEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x74   frame_len=4     set work antenna         _ZN10tcp_client12Set_Work_AntEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x75   frame_len=3     get work antenna         _ZN10tcp_client12Get_Work_AntEv
+
+  cmd=0x76   frame_len=4     set ant power            _ZN10tcp_client13Set_Ant_powerEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x77   frame_len=3     get ant power            _ZN10tcp_client13Get_Ant_PowerEv
+
+  cmd=0x78   frame_len=6     set freq standard        _ZN10tcp_client21Set_Frequece_StandardEhhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[0]
+        payload[ 2] -> frame[ 6] = arg3[0]
+
+  cmd=0x78   frame_len=10    set frequency            _ZN10tcp_client12Set_FrequeceEjth
+        payload[ 0] -> frame[ 4] = 4[0]
+        payload[ 1] -> frame[ 5] = -- (uninitialised)
+        payload[ 2] -> frame[ 6] = arg2[0]
+        payload[ 3] -> frame[ 7] = arg3[0]
+        payload[ 4] -> frame[ 8] = arg1[2]
+        payload[ 5] -> frame[ 9] = arg1[1]
+        payload[ 6] -> frame[10] = arg1[0]
+
+  cmd=0x79   frame_len=3     get frequency            _ZN10tcp_client13Get_FrequenceEv
+
+  cmd=0x7A   frame_len=4     set beeper               _ZN10tcp_client15Set_Beep_statusEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x7B   frame_len=3     read temp                _ZN10tcp_client14Read_Work_TempEv
+
+  cmd=0x80   frame_len=4     buffered inventory       _ZN10tcp_client20Start_Buff_InventoryEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x81   frame_len=14    ISO18000-6C read         _ZN10tcp_client9RFID_ReadEhjtj
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[3]
+        payload[ 2] -> frame[ 6] = arg2[2]
+        payload[ 3] -> frame[ 7] = arg2[1]
+        payload[ 4] -> frame[ 8] = arg2[0]
+        payload[ 5] -> frame[ 9] = arg3[1]
+        payload[ 6] -> frame[10] = arg3[0]
+        payload[ 7] -> frame[11] = arg5[3]
+        payload[ 8] -> frame[12] = arg5[2]
+        payload[ 9] -> frame[13] = arg5[1]
+        payload[10] -> frame[14] = arg5[0]
+
+  cmd=0x82   frame_len=?     ISO18000-6C write        _ZN10tcp_client10RFID_WriteEhhjtPcj
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+        payload[ 1] -> frame[ 5] = arg7[2]
+        payload[ 2] -> frame[ 6] = arg7[1]
+        payload[ 3] -> frame[ 7] = arg7[0]
+        payload[ 4] -> frame[ 8] = arg2[0]
+        payload[ 5] -> frame[ 9] = arg3[3]
+        payload[ 6] -> frame[10] = arg3[2]
+        payload[ 7] -> frame[11] = arg3[1]
+        payload[ 8] -> frame[12] = arg3[0]
+        payload[ 9] -> frame[13] = arg5[1]
+        payload[10] -> frame[14] = arg5[0]
+
+  cmd=0x83   frame_len=9     ISO18000-6C lock         _ZN10tcp_client9RFID_LockEhhj
+        payload[ 0] -> frame[ 4] = arg3[3]
+        payload[ 1] -> frame[ 5] = arg3[2]
+        payload[ 2] -> frame[ 6] = arg3[1]
+        payload[ 3] -> frame[ 7] = arg3[0]
+        payload[ 4] -> frame[ 8] = arg1[0]
+        payload[ 5] -> frame[ 9] = arg2[0]
+
+  cmd=0x84   frame_len=7     ISO18000-6C kill         _ZN10tcp_client9RFID_KillEj
+        payload[ 0] -> frame[ 4] = arg1[3]
+        payload[ 1] -> frame[ 5] = arg1[2]
+        payload[ 2] -> frame[ 6] = arg1[1]
+        payload[ 3] -> frame[ 7] = arg1[0]
+
+  cmd=0x85   frame_len=?     set EPC match            _ZN10tcp_client13Set_Epc_MatchEhPc
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+        payload[ 1] -> frame[ 5] = -- (uninitialised)
+
+  cmd=0x86   frame_len=3     get EPC match            _ZN10tcp_client13Get_Epc_MatchEv
+
+  cmd=0x87   frame_len=?     switch-ant inventory     _ZN10tcp_client20Switch_Ant_InventoryEhPhS0_hhhh
+        payload[ 0] -> frame[ 4] = arg8[0]
+
+  cmd=0x89   frame_len=4     realtime inventory       _ZN10tcp_client18RealTime_InventoryEh
+        payload[ 0] -> frame[ 4] = arg1[0]
+
+  cmd=0x8A   frame_len=7     custom inventory         _ZN10tcp_client16Custom_InventoryEhhhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[0]
+        payload[ 2] -> frame[ 6] = arg3[0]
+        payload[ 3] -> frame[ 7] = arg5[0]
+
+  cmd=0x8B   frame_len=6     custom session inv       _ZN10tcp_client24Custom_Session_InventoryEhhh
+        payload[ 0] -> frame[ 4] = arg1[0]
+        payload[ 1] -> frame[ 5] = arg2[0]
+        payload[ 2] -> frame[ 6] = arg3[0]
+
+  cmd=0x8C   frame_len=3     stop inventory           _ZN10tcp_client14Stop_InventoryEv
+
+  cmd=0x90   frame_len=3     get tag buffer           _ZN10tcp_client12Get_Tag_BuffEv
+
+  cmd=0x91   frame_len=3     get+clear tag buffer     _ZN10tcp_client18Get_and_Clear_BuffEv
+
+  cmd=0x92   frame_len=3     get tag count            _ZN10tcp_client11Get_Tag_NumEv
+
+  cmd=0x93   frame_len=3     clear tag buffer         _ZN10tcp_client14Clear_Tag_BuffEv
+
+  cmd=0x98   frame_len=19    GB double identify       _ZN10tcp_client21RFID_GbDoubleIdentifyEPc
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+
+  cmd=??     frame_len=?     uart monitor passthrough _ZN10tcp_client17Uart_Moniter_SendEPch
+        payload[ 0] -> frame[ 4] = -- (uninitialised)
+
+  cmd=??     frame_len=?                              _ZN10tcp_client15remove_err_dataEhh
+        payload[ 0] -> frame[ 4] = this+0x469
+
+  cmd=??     frame_len=?                              _ZN10tcp_client13GetServerDataEv
+        payload[ 0] -> frame[ 4] = 0[0]
+
+  cmd=??     frame_len=?                              _ZN10tcp_client14set_rs485_addrEh
+        payload[ 0] -> frame[ 4] = arg1[0]

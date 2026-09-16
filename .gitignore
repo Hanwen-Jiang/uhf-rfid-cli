@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 运行脚本产生的日志（真机日志只保留 re/hardware_logs/ 里那几个）
+*.log
+
+# 逆向工具生成的缓存（symaddr.py 会写出 6 MB 的符号表）
+re/symbols.txt
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
