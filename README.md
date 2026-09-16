@@ -56,10 +56,29 @@ python3 read_epc_tid.py --antenna 1 --power 26
 
 - **选 `cu.*` 不要选 `tty.*`**。macOS 的 `tty.*` 会等 DCD 信号，读写器不发就会卡住不动。
   自动挑口时 `cu.*` 优先。
-- **驱动**：CH340/CH341 需要装 WCH 的 macOS 驱动；CP210x 装 Silicon Labs 的
-  （新版 macOS 多数已免驱）；FTDI 是系统自带免驱。插上后 `ls /dev/cu.*` 应该能看到新设备。
 - 蓝牙虚拟串口（`/dev/cu.Bluetooth-Incoming-Port`）会被排到最后，不会被自动挑中。
 - 如果提示端口被占用：`lsof /dev/cu.usbserial-1420` 看是谁占着。
+
+### macOS 的串口驱动（这是最容易卡住的一步）
+
+**macOS 基本不带 USB 转串口驱动**，插上线如果 `ls /dev/cu.*` 看不到新设备，
+就是缺驱动，不是线坏了。Apple 从 Monterey (12.0) 起把自带的 FTDI 驱动都删了，
+所以常见芯片都要自己装：
+
+| 芯片 | 驱动 | 说明 |
+|---|---|---|
+| CH340 / CH341 | `brew install --cask wch-ch34x-usb-serial-driver` | 或在 [wch-ic.com](https://www.wch.cn/downloads/CH34XSER_MAC_ZIP.html) 下 `CH34xVCPDriver` |
+| CP210x | Silicon Labs CP210x VCP 驱动 | 官网下载，需注册 |
+| FTDI | FTDI VCP 驱动 | macOS 12 起不再自带 |
+| CDC-ACM | **免驱** | 设备名是 `/dev/cu.usbmodem*` |
+
+装完 CH34x 驱动后，还要**手动允许它加载**：打开「启动台」里的 `CH34xVCPDriver`
+应用点 Install，然后到「系统设置 → 隐私与安全性」里允许，再重启。
+装对了的话设备会以 `/dev/cu.wchusbserial*` 出现（`System Report → USB` 里
+能看到 Vendor ID `0x1a86`）。
+
+参考：[WCH 官方驱动说明](https://github.com/WCHSoftGroup/ch34xser_macos)、
+[Apple 的 kext 授权说明](https://developer.apple.com/library/content/technotes/tn2459/_index.html)。
 
 ---
 

@@ -35,6 +35,38 @@ cd android
 **连接后复位**默认开（和原 GUI 一致），**关蜂鸣器**默认关
 （读写器每盘存到一个标签就响一声，连读时很吵）。
 
+## Android 不需要装驱动（和 macOS 正好相反）
+
+**这是 Android 相对 macOS 最大的好处**：CH340/CH341 在 Android 上**免驱**，
+不用 root、不用装 kext、不用重启。
+
+原因是 Android 内核里同样没有这些芯片的驱动，但 `usb-serial-for-android` 这个库
+**在用户态用 Java 自己实现了 CH341 的 USB 协议**，直接通过 Android 的
+USB Host API 读写原始 USB 端点。库的作者原话：
+
+> No root access, ADK, or special kernel drivers are required;
+> all drivers are implemented in [user space]
+
+它支持的芯片（全部免驱）：
+
+- Qinheng **CH340、CH341A**、CH343、CH9102
+- FTDI FT232R/FT232H/FT2232H/FT4232H/FT230X/FT231X/FT234XD
+- Prolific PL2303
+- Silabs CP2102、CP210x
+- CDC-ACM（按 USB 接口类型自动识别）
+
+所以你在 Mac 上折腾的那个 CH341 驱动，安卓这边**完全不用管**。
+
+### 插上没反应的排查顺序
+
+1. **手机支持 OTG 吗**：绝大多数近几年的安卓机都支持，但少数低端机没有 USB Host。
+2. **OTG 开关**：小米/红米（HyperOS/MIUI）在「设置 → 更多设置 → OTG」里，
+   而且**默认 10 分钟不用会自动关**，插线前先打开。
+3. **OTG 线**：有些线只能充电不能传数据，换一根；Type-C 口建议用带 OTG 芯片的转接头。
+4. **供电**：读写器自己供电的话没问题（手机只给适配器供电，几十毫安）。
+   如果适配器都带不动，用一个**带供电的 OTG Hub**（Y 型线）。
+5. 权限弹窗点错「拒绝」了：到「设置 → 应用 → UHF RFID → 清除默认」或者拔插一次重新授权。
+
 ## 代码结构
 
 | 文件 | 作用 |

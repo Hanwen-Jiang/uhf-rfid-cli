@@ -627,13 +627,18 @@ def serial_hint(port, exc):
         if os.name != 'nt':
             lines += [
                 'macOS 上 USB 转串口一般是 /dev/cu.usbserial-*、'
-                '/dev/cu.wchusbserial-*、/dev/cu.SLAB_USBtoUART*，',
+                '/dev/cu.wchusbserial-*、/dev/cu.usbmodem*；',
                 'Linux 上一般是 /dev/ttyUSB0、/dev/ttyACM0。',
-                '注意 macOS 要选 cu.* 而不是 tty.*（tty.* 会等 DCD 信号）。',
-                '如果插上了却没有设备节点，多半是缺驱动：',
-                '  CH340/CH341 -> 装 WCH 官方 macOS 驱动',
-                '  CP210x      -> 装 Silicon Labs 驱动（新版 macOS 多数免驱）',
-                '  FTDI        -> macOS 自带，免驱',
+                'macOS 要选 cu.* 而不是 tty.*（tty.* 会等 DCD 信号）。',
+                '',
+                '线插上了却一个设备节点都没有 = 缺驱动。macOS 从 Monterey 起',
+                '连自带的 FTDI 驱动都删了，所以基本上都要自己装：',
+                '  CH340/CH341 -> brew install --cask wch-ch34x-usb-serial-driver',
+                '                 （或 wch-ic.com 下 CH34xVCPDriver，装完到'
+                '「系统设置→隐私与安全性」允许加载，再重启）',
+                '  CP210x      -> 装 Silicon Labs 的 CP210x VCP 驱动',
+                '  FTDI        -> 装 FTDI 的 VCP 驱动（macOS 12 起不再自带）',
+                '  CDC-ACM     -> 免驱，设备名是 /dev/cu.usbmodem*',
             ]
         return lines
     return None
