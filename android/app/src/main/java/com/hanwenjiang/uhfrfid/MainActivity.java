@@ -106,6 +106,11 @@ public class MainActivity extends AppCompatActivity {
         writeBtn.setOnClickListener(v -> writeOnce());
         findViewById(R.id.scanUsbBtn).setOnClickListener(
                 v -> setStatus(usbDiagnostics()));
+        // 长按 = 芯片寄存器探针（排查 CH34x 初始化失败用）
+        findViewById(R.id.scanUsbBtn).setOnLongClickListener(v -> {
+            setStatus(chipProbe());
+            return true;
+        });
 
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
@@ -196,6 +201,45 @@ public class MainActivity extends AppCompatActivity {
         return sb.toString();
     }
 
+    /**
+     * 直接对芯片发一次控制传输，读版本寄存器 0x5F 的两个字节。
+     *
+     * <p>usb-serial-for-android 的 CH34x 初始化第 1 步就是读这个寄存器，并且要求
+     * <b>第 2 个字节等于 0x00</b>，否则报 "Expected 0x0 byte, but get 0xXX [init #1]"。
+     * 把两个字节都打出来，就能判断是芯片本身这么回、还是中间传输层（比如模拟器的
+     * USB 透传）把数据搞坏了。
+     */
+    private String chipProbe() {
+        java.util.List<com.hoho.android.usbserial.driver.UsbSerialDriver> drivers =
+                SerialTransport.listDrivers(usbManager);
+        if (drivers.isEmpty()) return "没有可探测的串口设备。";
+        UsbDevice dev = drivers.get(0).getDevice();
+        if (!usbManager.hasPermission(dev)) {
+            return "还没有 USB 权限，先点一次「连接」把权限给了再探。";
+        }
+        android.hardware.usb.UsbDeviceConnection conn =
+                usbManager.openDevice(dev);
+        if (conn == null) return "openDevice 返回 null。";
+        try {
+            StringBuilder sb = new StringBuilder();
+            // 0xC0 = 设备到主机 | 厂商请求 | 设备接收者
+            int[] reqs = {0x5F, 0x5F, 0x95};
+            for (int req : reqs) {
+                byte[] buf = new byte[2];
+                int n = conn.controlTransfer(0xC0, req, 0, 0, buf, buf.length, 500);
+                if (n < 0) {
+                    sb.append(String.format("  控制传输 0x%02X -> 失败 (n=%d)%n", req, n));
+                } else {
+                    sb.append(String.format("  控制传输 0x%02X -> %d 字节: %s%n",
+                            req, n, RfidFrame.hexSpaced(RfidFrame.slice(buf, 0, n))));
+                }
+            }
+            return "CH34x 芯片寄存器探测（期望 0x5F 返回的第 2 字节 = 00）：\n" + sb;
+        } finally {
+            conn.close();
+        }
+    }
+
     // ------------------------------------------------------------ 连接
 
     private void connectOrDisconnect() {
@@ -229,8 +273,14 @@ public class MainActivity extends AppCompatActivity {
         }
         UsbDevice dev = drivers.get(0).getDevice();
         setStatus("请求 USB 权限：" + SerialTransport.describe(dev) + " …");
+        // 这个 PendingIntent 必须是 MUTABLE。USB 权限对话框由系统弹出，
+        // 系统会往这个 Intent 里补 EXTRA_DEVICE / EXTRA_PERMISSION_GRANTED；
+        // 用 FLAG_IMMUTABLE 系统就塞不进 extras，回调收不到 ——
+        // 表现是「弹窗一闪而过，然后一点反应都没有」。
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            flags |= PendingIntent.FLAG_MUTABLE;
+        }
         PendingIntent pi = PendingIntent.getBroadcast(
                 this, 0, new Intent(ACTION_USB_PERMISSION), flags);
         usbManager.requestPermission(dev, pi);

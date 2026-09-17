@@ -79,86 +79,107 @@ USB Host API 读写原始 USB 端点。库的作者原话：
 | `MainActivity.java` | 界面 + USB 权限 + 后台线程 |
 | `selftest/RfidFrameSelfTest.java` | 协议自测，纯 JVM 跑，不需要 Android |
 
-## 在模拟器里调试
+## 在模拟器里测 USB（已跑通，附一键脚本）
 
-**这个 App 只有 USB-OTG 一种连接方式，而模拟器透传不了 USB 串口**，
-所以模拟器只能用来调界面，**要测 USB 模式必须用真机**。
-
-```bash
-# 列出可用 AVD
-"$ANDROID_HOME/emulator/emulator.exe" -list-avds
-
-# 建一个（只需要一次）
-"$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager.bat" create avd \
-    -n rfid34 -k "system-images;android-34;google_apis;x86_64" -d pixel_5
-
-# 启动（带窗口）
-"$ANDROID_HOME/emulator/emulator.exe" -avd rfid34 -no-snapshot -no-boot-anim \
-    -gpu auto -skin 480x1040
-```
-
-**`-skin 480x1040` 之后一定要调密度**，否则像素密度还是 440dpi，dp 宽度只有 174
-（正常手机 360~420dp），界面文字会乱换行：
-
-```bash
-adb shell wm density 200      # 480px / 200dpi * 160 ≈ 384dp，正常手机宽度
-```
-
-装上去点「扫描 USB 设备」会显示 `0 个`，这是正常的 —— 模拟器里没有 USB 总线。
-
-## 关于模拟器的 USB 透传（结论：走不通）
-
-官方模拟器**有**这个选项：
+**结论：可以。** 已经在 Android 14 模拟器里通过 USB 透传连上真读写器、读到真标签：
 
 ```
--usb-passthrough vendorid=VID,productid=PID[,hostbus=BUS,hostport=PORT]
+已连接 USB 串口 (1a86:5523)
+固件 02 03 01
+天线 1  功率 26
+
+读到标签（463 ms）
+EPC  E28069150000502008B25C75
+TID  E28069152000502008B25C75
 ```
 
-Windows 上还需要先装 SDK 自带的 USB 辅助驱动，否则会报
-`Cannot load Android USB Assistant Driver ... USB pass-through might not work`：
+一键搭建（需要管理员权限）：
 
-```bat
-:: 需要管理员权限
-cd %ANDROID_HOME%\emulator\drivers
-Android_USB_Assistant_Install.bat     :: pnputil -i -a Android_USB_Assistant.Inf
-UsbAssist_Install.bat                 :: 装并启动 UsbAssist 内核服务
+```powershell
+powershell -ExecutionPolicy Bypass -File android\tools\setup-emulator-usb.ps1
 ```
 
-**实测（Windows 11 26200 + emulator 37.1.11 + WHPX，CH341 = 1a86:5523）：**
-驱动装好、`UsbAssist` 服务 `RUNNING`、那个驱动错误确实消失了，但
+它处理了**三道坎**，缺一个都不行：
 
-- 加 `-usb-passthrough` → **模拟器立刻退出**；去掉参数则正常启动；
-- 不带透传时，客户机 `/dev/bus/usb/001/` 里只有根集线器，扫不到任何设备。
+1. **`-usb-passthrough vendorid=1a86` 会让模拟器直接崩掉。**
+   emulator 把这个值原样转给 QEMU 的 `-device usb-host`，而 QEMU 要求 int64，
+   必须写成 `vendorid=0x1a86`。这个报错只出现在 stderr 里：
+   `Parameter 'vendorid' expects an int64 value or range`。
 
-所以这台机器上透传不可用，**USB 模式只能在真手机上验证**。
+2. **Windows 上要装 SDK 自带的 USB 辅助驱动**，否则报
+   `Cannot load Android USB Assistant Driver ... might not work`：
+   ```bat
+   cd %ANDROID_HOME%\emulator\drivers
+   Android_USB_Assistant_Install.bat
+   UsbAssist_Install.bat
+   ```
 
-> **关于 MuMu（实测，结论：不可能）**
->
-> MuMu 的内核里**根本没有 USB 子系统**，所以无论怎么配透传都没用：
->
-> ```
-> $ adb -s 127.0.0.1:7555 shell 'zcat /proc/config.gz | grep CONFIG_USB_SUPPORT'
-> # CONFIG_USB_SUPPORT is not set        <- USB 支持没编进内核
->
-> $ adb shell ls /sys/bus/usb/devices/
-> ls: /sys/bus/usb/devices/: No such file or directory
-> $ adb shell ls /dev/bus/usb
-> ls: /dev/bus/usb: No such file or directory
-> $ adb shell 'ls /sys/module/ | grep -i usb'
-> (空 —— 一个 USB 模块都没有)
-> ```
->
-> 客户机是 Linux 6.1.90 aarch64，但 `CONFIG_USB_SUPPORT` **未启用**，
-> `init.svc.usbd` 也是 `stopped`。Android 的 `UsbManager` 拿不到任何设备，
-> App 里点「扫描 USB 设备」永远是 `0 个`（已实测）。
-> 它的虚拟机确实是 VirtualBox 内核（`C:\Program Files\MuMuNxVbox\`），
-> VirtualBox 本身也有 USB 透传，但**客户机内核没有 USB 栈，透过去也没人认**。
-> 这条路到此为止。
->
-> 真想在全虚拟环境里测 USB 透传，需要客户机内核带 USB 支持的镜像，
-> 也就是 **VirtualBox + Android-x86** 那一套。
+3. **模拟器的 system 镜像里没有 `android.hardware.usb.host` 声明**，
+   所以 `UsbHostManager` 不启动，`UsbManager.getDeviceList()` 永远返回空。
+   `/system` 只读，而 `adb remount` 在动态分区上会失败
+   （`could not map scratch image`，`disable-verity` + 重启也救不了），
+   所以脚本改成 **bind mount** 一份改过的 permissions 目录，再重启 framework。
+   > 注意：bind mount 的 SELinux 标签必须是 `u:object_r:system_file:s0`。
+   > 标签不对的话 `system_server` 读不到文件，**zygote 会进入崩溃循环**，
+   > 表现是 `pm list features` 一直返回 0。
 
-卸载（不想留的话）：
+   这套只改内存，不动 system 镜像 —— 关掉模拟器重开就恢复原状。
+
+### 手动做的话
+
+```powershell
+# 1) 起模拟器（注意 0x 前缀）
+emulator -avd rfid34 -no-snapshot -no-boot-anim -gpu auto -skin 480x1040 `
+         -usb-passthrough vendorid=0x1a86,productid=0x5523
+
+# 2) 注入特性声明
+adb root
+adb shell 'rm -rf /data/local/tmp/perms; mkdir -p /data/local/tmp/perms; cp -a /system/etc/permissions/. /data/local/tmp/perms/'
+adb push android.hardware.usb.host.xml /data/local/tmp/perms/
+adb shell 'chcon -R u:object_r:system_file:s0 /data/local/tmp/perms'
+adb shell 'mount --bind /data/local/tmp/perms /system/etc/permissions'
+
+# 3) 重启 framework（不是重启虚拟机）
+adb shell stop ; adb shell start
+
+# 4) 验证
+adb shell 'pm list features' | findstr usb.host
+adb shell 'cat /sys/bus/usb/devices/1-1/idVendor'     # 应该输出 1a86
+adb shell 'wm density 200'                            # 480x1040 窗口下必须调，否则文字乱换行
+
+# 5) 装 App 测试
+cd android ; .\gradlew.bat assembleDebug
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+adb shell am start -n com.hanwenjiang.uhfrfid/.MainActivity
+```
+
+### 关于 MuMu（实测，结论：不可能）
+
+MuMu 的内核里**根本没有 USB 子系统**：
+
+```
+$ adb -s 127.0.0.1:7555 shell 'zcat /proc/config.gz | grep CONFIG_USB_SUPPORT'
+# CONFIG_USB_SUPPORT is not set        <- USB 支持没编进内核
+
+$ adb shell ls /sys/bus/usb/devices/
+ls: /sys/bus/usb/devices/: No such file or directory
+$ adb shell ls /dev/bus/usb
+ls: /dev/bus/usb: No such file or directory
+$ adb shell 'ls /sys/module/ | grep -i usb'
+(空 —— 一个 USB 模块都没有)
+```
+
+客户机是 Linux 6.1.90 aarch64，但 `CONFIG_USB_SUPPORT` **未启用**，
+`init.svc.usbd` 也是 `stopped`。Android 的 `UsbManager` 拿不到任何设备，
+App 里点「扫描 USB 设备」永远是 `0 个`（已实测）。
+它的虚拟机确实是 VirtualBox 内核（`C:\Program Files\MuMuNxVbox\`，
+`VBoxManage.exe` 都在），但**客户机内核没有 USB 栈，透过去也没人认**。
+这条路到此为止。
+
+> 顺带：`VBoxManage` 也指挥不动它，报 `CO_E_SERVER_EXEC_FAILURE` ——
+> MuMu 用的是改过的 VirtualBox，COM 服务是它自己的。
+
+## 卸载辅助驱动（不想留的话）
 
 ```bat
 cd %ANDROID_HOME%\emulator\drivers
