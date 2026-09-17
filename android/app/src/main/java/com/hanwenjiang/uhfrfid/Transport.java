@@ -1,5 +1,7 @@
 package com.hanwenjiang.uhfrfid;
 
+import android.util.Log;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +11,9 @@ import java.util.List;
  * 底下是哪种 —— 协议帧在两种传输上是完全一样的。
  */
 public abstract class Transport {
+
+    /** logcat 里过滤用：adb logcat -s RfidIo */
+    public static final String TAG = "RfidIo";
 
     protected final StringBuilder log = new StringBuilder();
 
@@ -21,7 +26,6 @@ public abstract class Transport {
 
     /** 发出一个完整帧。 */
     public abstract void write(byte[] frame) throws IOException;
-
     /**
      * 读一批字节。
      *

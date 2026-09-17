@@ -133,64 +133,196 @@ public class RfidReader {
     }
 
     /**
-     * 写某个 bank。
+     * 读 EPC 区的当前内容，取出 EPC 本身（12 字节）。
      *
-     * @return 读写器是否应答（应答里第 1 个字节是状态，0x10 表示接受）
+     * <p><b>写标签前必须用这个，不能用 {@link #readEpcTid()}。</b>
+     * 实测：0x8A 自定义盘存之后紧接着写，读写器会稳定回状态码 <b>0x41</b>
+     * 并且写不进去（补发 0x8C 停止盘存也没用）；改成先做一次 0x81 读内存就没问题。
+     * 对照实验（同一个标签、同样的写入报文、Python 侧复刻）：
+     * <pre>
+     *   0x8A 流程：3/6 失败，回读没变
+     *   0x81 流程：6/6 成功，回读跟着变
+     * </pre>
+     *
+     * <p>读应答是 {@code 00 01 <len> <PC 2字节> <数据>}，所以 EPC 在偏移 5。
+     */
+    public byte[] readCurrentEpc() throws IOException {
+        // EPC 区字 2 起才是 EPC 本身（字 0-1 是 CRC + PC）
+        byte[] p = readBank(1, 2, 6);
+        if (p == null || p.length < 5 + 12) return null;
+        byte[] epc = RfidFrame.slice(p, 5, 12);
+        for (byte b : epc) {
+            if (b != 0) return epc;
+        }
+        return null;
+    }
+
+    /** 单次写入的最大尝试次数。0x41 是偶发的，重写几次通常就过了。 */
+    public static final int WRITE_ATTEMPTS = 8;
+
+    /**
+     * 写某个 bank，**失败就一直重写直到成功**（最多 {@link #WRITE_ATTEMPTS} 次）。
+     *
+     * <p>实测 0x41 这种失败是偶发的 —— 同一帧重发一次往往就成功了，所以这里不
+     * 一次不成就放弃。每次尝试都会打印状态码，方便看出是不是真的写不进去。
+     *
+     * @return 是否成功。成功时读应答形如 {@code 00 <字数2> 10 <PC> <数据> <CRC> 10 01}，
+     *         状态码在偏移 2；失败时只有一个字节，就是状态码本身（例如 0x41）。
      */
     public boolean writeBank(int bank, int wordAddr, byte[] data) throws IOException {
-        List<RfidFrame.Frame> fs = io.transact(RfidFrame.build(RfidFrame.CMD_WRITE,
-                RfidFrame.payloadWrite(bank, wordAddr, data, 0)), 4000);
-        for (RfidFrame.Frame f : fs) {
-            if (f.ok && f.cmd == RfidFrame.CMD_WRITE) {
-                boolean accepted = f.payload.length > 0 && (f.payload[0] & 0xFF) == 0x10;
-                say("  写应答: " + RfidFrame.hexSpaced(f.payload)
-                        + (accepted ? "   (接受)" : "   (未接受)"));
-                return accepted;
+        int lastCode = -1;
+        for (int attempt = 1; attempt <= WRITE_ATTEMPTS; attempt++) {
+            List<RfidFrame.Frame> fs = io.transact(RfidFrame.build(RfidFrame.CMD_WRITE,
+                    RfidFrame.payloadWrite(bank, wordAddr, data, 0)), 4000);
+            boolean got = false;
+            for (RfidFrame.Frame f : fs) {
+                if (f.ok && f.cmd == RfidFrame.CMD_WRITE) {
+                    got = true;
+                    // 长应答（>=3 字节）的状态码在第 3 字节；短应答就是错误码本身
+                    lastCode = f.payload.length >= 3
+                            ? (f.payload[2] & 0xFF) : (f.payload.length == 1
+                            ? (f.payload[0] & 0xFF) : -1);
+                    boolean ok = lastCode == 0x10;
+                    say("  写应答: " + RfidFrame.hexSpaced(f.payload)
+                            + (ok ? "   (接受)" : String.format("   (失败 0x%02X)", lastCode))
+                            + (attempt > 1 ? "   第 " + attempt + " 次" : ""));
+                    if (ok) return true;
+                    break;
+                }
+            }
+            if (!got) say("  第 " + attempt + " 次没有应答，重写…");
+            if (attempt < WRITE_ATTEMPTS) {
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
-        say("  写命令没有应答 —— 多半是场上没标签，或 EPC 匹配没设对");
+        say(String.format("  重写了 %d 次仍未成功，最后状态码 0x%02X",
+                WRITE_ATTEMPTS, lastCode));
+        return false;
+    }
+
+    /** 写入一个 bank 的结果。 */
+    public static final class WriteResult {
+        public boolean ok;
+        public int attempts;
+        public String readBack;      // 回读到的值（大写 hex），读不到为 null
+        public String error;         // 失败原因，成功时为 null
+    }
+
+    /**
+     * 写入 + 回读校验，不成功就整轮重来（最多 {@link #WRITE_ATTEMPTS} 轮）。
+     *
+     * <p>这是用户要的语义：**0x41 就再写一遍，一直写到成功为止**。
+     * 只看写入应答还不够 —— 有时候应答是成功的但内容没落地，所以以回读为准。
+     *
+     * <p><b>校验方式：在读应答里查找写入的数据，而不是按固定偏移切。</b>
+     * 读写器的读应答是一条<b>合并记录</b>：
+     * <pre>
+     *   00 01 &lt;len&gt; &lt;PC 2字节&gt; &lt;EPC 12字节&gt; &lt;CRC 2字节&gt; &lt;TID 12字节&gt; …
+     * </pre>
+     * 所以 EPC 在偏移 5、TID 在偏移 19。以前一律按偏移 5 取，读 TID 时取到的
+     * 其实是 EPC，于是永远「不一致」，白白重写 8 轮也写不进去。
+     */
+    public WriteResult writeBankVerified(int bank, int wordAddr, byte[] data, String label)
+            throws IOException {
+        WriteResult res = new WriteResult();
+        String want = RfidFrame.hex(data);
+        for (int round = 1; round <= WRITE_ATTEMPTS; round++) {
+            res.attempts = round;
+            if (round > 1) say("  第 " + round + " 轮重写 " + label + "…");
+            writeBank(bank, wordAddr, data);
+            byte[] back = readBank(bank, wordAddr, data.length / 2);
+            res.readBack = back == null ? null : extract(back, data, bank);
+            if (back != null && contains(back, data)) {
+                res.ok = true;
+                return res;
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        res.error = String.format("重写 %d 轮后回读仍是 %s，未变成 %s",
+                res.attempts, res.readBack == null ? "(读不到)" : res.readBack, want);
+        return res;
+    }
+
+    /**
+     * 从读应答里把目标 bank 的数据取出来给界面显示。
+     *
+     * <p>合并记录的偏移：EPC 区数据在 5，TID 区数据在 19（5 + EPC 12 + CRC 2）。
+     * 其它 bank 先按 5 试，取不到就退回整条应答。
+     */
+    private static String extract(byte[] reply, byte[] want, int bank) {
+        int off = bank == 2 ? 19 : 5;
+        if (reply.length >= off + want.length) {
+            return RfidFrame.hex(RfidFrame.slice(reply, off, want.length));
+        }
+        return RfidFrame.hex(reply);
+    }
+
+    /** data 是否作为连续子串出现在 reply 里。 */
+    private static boolean contains(byte[] reply, byte[] data) {
+        if (data.length == 0 || reply.length < data.length) return false;
+        outer:
+        for (int i = 0; i + data.length <= reply.length; i++) {
+            for (int j = 0; j < data.length; j++) {
+                if (reply[i + j] != data[j]) continue outer;
+            }
+            return true;
+        }
         return false;
     }
 
     /**
-     * 完整写一次：清匹配 → 盘存 → 设匹配 → 写 EPC → 回读 → 写 TID → 回读。
+     * 完整写一次：读当前 EPC → 设匹配 → 写 EPC → 回读 → 写 TID → 回读。
      * 对应电脑端的 {@code tag_write_epc_tid.py}。
      */
     public String writeEpcAndTid(byte[] epc, int epcStart, byte[] tid, int tidStart)
             throws IOException {
         StringBuilder r = new StringBuilder();
 
-        // 1) 先盘存，确认场上有标签，并拿到它的 EPC 用于设匹配
-        RfidFrame.TagId cur = readEpcTid();
-        if (!cur.ok()) {
-            return "场上没读到标签。把标签贴近天线，或换个天线口/功率再试。";
+        // 1) 拿当前 EPC 用于设匹配。
+        //    注意这里用 0x81 读内存，**不能用 0x8A 盘存** —— 0x8A 之后的写入会一直失败。
+        byte[] cur = readCurrentEpc();
+        if (cur == null) {
+            return "场上没读到标签（0x81 读 EPC 区无数据）。\n"
+                    + "把标签贴近天线，或换个天线口/功率再试。";
         }
-        r.append("当前标签  EPC=").append(cur.epc).append("  TID=").append(cur.tid).append('\n');
+        r.append("当前标签  EPC=").append(RfidFrame.hex(cur)).append('\n');
 
         // 2) 设匹配锁定目标（写命令本身不带目标 EPC，不设匹配读写器可能不回应答）
-        armEpcMatch(RfidFrame.unhex(cur.epc));
+        armEpcMatch(cur);
 
-        // 3) 写 EPC
+        // 3) 写 EPC —— 不成功就整轮重写，以回读为准
         say("写 EPC 区：起始字 " + epcStart + "，" + (epc.length / 2) + " 字");
-        boolean w1 = writeBank(1, epcStart, epc);
-        byte[] back = readBank(1, epcStart, epc.length / 2);
-        String readEpc = back == null ? null
-                : RfidFrame.hex(RfidFrame.slice(back, 5, epc.length));
-        r.append("写 EPC    ").append(w1 ? "已接受" : "无应答")
-                .append("   回读=").append(readEpc == null ? "(无)" : readEpc)
-                .append(readEpc != null && readEpc.equalsIgnoreCase(RfidFrame.hex(epc))
-                        ? "  一致 ✓" : "  ⚠ 不一致").append('\n');
+        WriteResult w1 = writeBankVerified(1, epcStart, epc, "EPC 区");
+        r.append("写 EPC 区  ").append(w1.ok ? "成功 ✓" : "失败 ✗")
+                .append("（").append(w1.attempts).append(" 轮）")
+                .append("   回读=").append(w1.readBack == null ? "(无)" : w1.readBack)
+                .append('\n');
+        if (!w1.ok) {
+            r.append("  ⚠ ").append(w1.error).append('\n');
+        }
 
-        // 4) 写 TID（多数 Gen2 标签的 TID 只读，写了不会变）
+        // 4) 写 TID —— 这个标签的 TID 是可写的（实测能改），所以同样重写到成功
         say("写 TID 区：起始字 " + tidStart + "，" + (tid.length / 2) + " 字");
-        boolean w2 = writeBank(2, tidStart, tid);
-        byte[] back2 = readBank(2, tidStart, tid.length / 2);
-        String readTid = back2 == null ? null
-                : RfidFrame.hex(RfidFrame.slice(back2, 5, tid.length));
-        r.append("写 TID    ").append(w2 ? "已接受" : "无应答")
-                .append("   回读=").append(readTid == null ? "(无)" : readTid)
-                .append(readTid != null && readTid.equalsIgnoreCase(RfidFrame.hex(tid))
-                        ? "  一致 ✓" : "  ⚠ 不一致（Gen2 的 TID 通常只读）").append('\n');
+        WriteResult w2 = writeBankVerified(2, tidStart, tid, "TID 区");
+        r.append("写 TID 区  ").append(w2.ok ? "成功 ✓" : "失败 ✗")
+                .append("（").append(w2.attempts).append(" 轮）")
+                .append("   回读=").append(w2.readBack == null ? "(无)" : w2.readBack)
+                .append('\n');
+        if (!w2.ok) {
+            r.append("  ⚠ ").append(w2.error).append('\n');
+            r.append("  （部分标签的 TID 是出厂只读的，写不进去属正常；"
+                    + "要写可改的存储区可以用 USER 区 bank 3）\n");
+        }
 
         return r.toString();
     }

@@ -99,6 +99,16 @@ TID  E28069152000502008B25C75
 powershell -ExecutionPolicy Bypass -File android\tools\setup-emulator-usb.ps1
 ```
 
+**第一次跑要三四分钟**（冷启动 + 重启 framework），之后脚本会建议存快照，
+再开机就是十几秒。想手动存：
+
+```bash
+adb emu avd snapshot save rfidusb     # 配好之后存
+emulator -avd rfid34 -snapshot rfidusb -usb-passthrough vendorid=0x1a86,productid=0x5523
+```
+
+> bind mount 只存在内存里，所以**必须用快照恢复**才能省掉重复配置；冷启动就得重配。
+
 它处理了**三道坎**，缺一个都不行：
 
 1. **`-usb-passthrough vendorid=1a86` 会让模拟器直接崩掉。**
@@ -119,9 +129,13 @@ powershell -ExecutionPolicy Bypass -File android\tools\setup-emulator-usb.ps1
    `/system` 只读，而 `adb remount` 在动态分区上会失败
    （`could not map scratch image`，`disable-verity` + 重启也救不了），
    所以脚本改成 **bind mount** 一份改过的 permissions 目录，再重启 framework。
-   > 注意：bind mount 的 SELinux 标签必须是 `u:object_r:system_file:s0`。
-   > 标签不对的话 `system_server` 读不到文件，**zygote 会进入崩溃循环**，
-   > 表现是 `pm list features` 一直返回 0。
+   > 注意两件事：
+   > - bind mount 的 SELinux 标签必须是 `u:object_r:system_file:s0`。
+   >   标签不对的话 `system_server` 读不到文件，**zygote 会进入崩溃循环**，
+   >   表现是 `pm list features` 一直返回 0。
+   > - 那个 XML **不能带 UTF-8 BOM**。`Set-Content -Encoding utf8` 在有些
+   >   PowerShell 上会加 BOM，Android 的 XML 解析器就读不出来了。用
+   >   `[System.IO.File]::WriteAllText($path, $xml, (New-Object System.Text.UTF8Encoding($false)))`。
 
    这套只改内存，不动 system 镜像 —— 关掉模拟器重开就恢复原状。
 
@@ -203,10 +217,44 @@ java -cp /tmp/jt com.hanwenjiang.uhfrfid.RfidFrameSelfTest re/capture53.hex
 校验和是不是按有符号累加，以及能否从真机抓包里正确解出 EPC/TID
 （包括「最后一个 0x53 是结束帧」那个坑）。共 26 项。
 
+## 写标签踩过的三个坑（都已修）
+
+1. **写之前不要做 0x8A 盘存。** 实测：0x8A 自定义盘存之后紧接着写，读写器会稳定回
+   状态码 **`0x41`** 并且写不进去（补发 `0x8C` 停止盘存也没用）；改成先用 **0x81 读
+   EPC 区**拿到当前 EPC 再写就没问题。对照实验（同一个标签、同样的写入报文）：
+   ```
+   0x8A 流程：3/6 失败，回读没变
+   0x81 流程：6/6 成功，回读跟着变
+   ```
+   `readEpcTid()`（0x8A）只用于"读"，写路径走 `readCurrentEpc()`（0x81）。
+
+2. **读应答是一条合并记录，偏移不是 5。**
+   ```
+   00 01 <len> <PC 2字节> <EPC 12字节> <CRC 2字节> <TID 12字节> …
+   ```
+   **EPC 在偏移 5，TID 在偏移 19。** 一律按偏移 5 取的话，读 TID 时取到的是 EPC，
+   于是"回读永远不一致"，重写多少轮都没用。现在改成在应答里**查找**写入的数据。
+
+3. **0x41 是偶发的，要重写。** 写入失败会一直重写到成功（最多 8 轮），
+   以**回读**为准而不是只看应答码。窗口里能看到第几轮成功、状态码是什么。
+
+另外两个只在特定 Android 版本上才会犯的错：
+
+- **USB 权限的 PendingIntent 必须 `FLAG_MUTABLE`**，否则系统塞不进
+  `EXTRA_DEVICE` / `EXTRA_PERMISSION_GRANTED`，表现是"弹窗一闪而过、毫无反应"。
+  但 targetSdk 34+ 又禁止 `FLAG_MUTABLE` 配**隐式** Intent（直接抛
+  `IllegalArgumentException`），所以还要 `intent.setPackage(getPackageName())`
+  把它变成显式 Intent。两个条件得同时满足。
+- **打开串口本身会偶发失败**（CH34x 初始化握手报
+  `Expected 0x0 byte, but get 0xec [init #1]`），所以连接也做了 3 次重试。
+
 ## 已知限制
 
-- **TID 通常写不了**：多数 Gen2 标签的 TID 是只读的，读写器会接受写命令但没有效果。
-  要写可改的存储区请用 USER 区（bank 3）。
+- **TID 能不能写取决于标签**。我们测的这颗（`E2806915…`）是**可写的**，实测写入并
+  回读一致；标准 Gen2 的 TID 是出厂只读的。程序不再假设 TID 只读，写完回读校验，
+  写不进去会如实报告并提示可以改用 USER 区（bank 3）。
 - 只做了单天线口 + 单次读写，没有做连续盘存/防碰撞列表。
 - 没有做断线自动重连：拔了线要重新点「连接」。
+- 在模拟器里跑 USB 透传时**连接偶发失败**（4 次里失败 2 次），是 QEMU 透传控制
+  传输不稳，已用重试兜住；真机上没这个问题。
 - 界面文字是中文，没有做多语言。

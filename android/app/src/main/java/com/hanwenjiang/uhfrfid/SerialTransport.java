@@ -1,6 +1,7 @@
 package com.hanwenjiang.uhfrfid;
 
 import android.hardware.usb.UsbDevice;
+import android.util.Log;
 import android.hardware.usb.UsbManager;
 
 import com.hoho.android.usbserial.driver.UsbSerialDriver;

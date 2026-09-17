@@ -20,6 +20,7 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -273,16 +274,21 @@ public class MainActivity extends AppCompatActivity {
         }
         UsbDevice dev = drivers.get(0).getDevice();
         setStatus("请求 USB 权限：" + SerialTransport.describe(dev) + " …");
-        // 这个 PendingIntent 必须是 MUTABLE。USB 权限对话框由系统弹出，
-        // 系统会往这个 Intent 里补 EXTRA_DEVICE / EXTRA_PERMISSION_GRANTED；
-        // 用 FLAG_IMMUTABLE 系统就塞不进 extras，回调收不到 ——
-        // 表现是「弹窗一闪而过，然后一点反应都没有」。
+        // 这个 PendingIntent 必须是 MUTABLE：USB 权限对话框由系统弹出，系统会往
+        // 这个 Intent 里补 EXTRA_DEVICE / EXTRA_PERMISSION_GRANTED；用 IMMUTABLE
+        // 系统塞不进 extras，回调收不到 —— 表现是「弹窗一闪而过，然后毫无反应」。
+        //
+        // 但 targetSdk 34+ 又规定：FLAG_MUTABLE **不能配隐式 Intent**，否则直接抛
+        //   IllegalArgumentException: Targeting U+ (version 34 and above) disallows
+        //   creating ... a PendingIntent with FLAG_MUTABLE, an implicit Intent ...
+        // 所以要先 setPackage() 把它变成显式 Intent，两者才能同时满足。
+        Intent perm = new Intent(ACTION_USB_PERMISSION);
+        perm.setPackage(getPackageName());
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             flags |= PendingIntent.FLAG_MUTABLE;
         }
-        PendingIntent pi = PendingIntent.getBroadcast(
-                this, 0, new Intent(ACTION_USB_PERMISSION), flags);
+        PendingIntent pi = PendingIntent.getBroadcast(this, 0, perm, flags);
         usbManager.requestPermission(dev, pi);
     }
 
@@ -295,9 +301,30 @@ public class MainActivity extends AppCompatActivity {
         setStatus("正在连接…");
         worker.execute(() -> {
             try {
-                Transport t = new SerialTransport(usbManager, granted);
+                // 打开串口本身也重试：CH34x 的初始化握手（读版本寄存器 0x5F）
+                // 在中间传输层不稳时会偶发失败，报
+                //   Expected 0x0 byte, but get 0xec [init #1]
+                // （实测：模拟器的 USB 透传下 4 次里失败 2 次；真机上少见但也会有）
+                Transport t = null;
+                IOException lastErr = null;
+                for (int attempt = 1; attempt <= 3 && t == null; attempt++) {
+                    Transport cand = new SerialTransport(usbManager, granted);
+                    try {
+                        cand.open();
+                        t = cand;
+                    } catch (IOException e) {
+                        lastErr = e;
+                        cand.close();
+                        if (attempt < 3) {
+                            appendLog("打开串口失败（第 " + attempt + " 次）："
+                                    + e.getMessage() + "，重试…");
+                            Thread.sleep(400);
+                        }
+                    }
+                }
+                if (t == null) throw lastErr;
+
                 RfidReader reader = session.use(t);
-                t.open();
 
                 if (doReset) reader.restart();
                 reader.clearEpcMatch();
@@ -385,7 +412,9 @@ public class MainActivity extends AppCompatActivity {
                 ui.post(() -> {
                     setStatus(report);
                     appendLog(raw);
-                    readOnce();
+                    // 注意：这里**不要**顺手 readOnce()。
+                    // 它会把刚写出来的报告立刻覆盖成「读到标签」，
+                    // 于是写入到底成没成功根本看不见。
                 });
             } catch (IllegalArgumentException e) {
                 session.lastStatus = "Hex 格式不对：" + e.getMessage();
