@@ -132,10 +132,31 @@ UsbAssist_Install.bat                 :: 装并启动 UsbAssist 内核服务
 
 所以这台机器上透传不可用，**USB 模式只能在真手机上验证**。
 
-> 关于 MuMu：查了官方帮助和社区，**没有找到 MuMu 支持 USB 设备透传的说明**
-> （它跟 USB 相关的只有 adb 调试和手柄）。所以不建议为这件事装 MuMu。
-> 真想在全虚拟环境里测 USB 透传，可行的是 **VirtualBox + Android-x86**
-> —— VirtualBox 有完整的 USB 透传筛选器，但那是另一套搭建工作。
+> **关于 MuMu（实测，结论：不可能）**
+>
+> MuMu 的内核里**根本没有 USB 子系统**，所以无论怎么配透传都没用：
+>
+> ```
+> $ adb -s 127.0.0.1:7555 shell 'zcat /proc/config.gz | grep CONFIG_USB_SUPPORT'
+> # CONFIG_USB_SUPPORT is not set        <- USB 支持没编进内核
+>
+> $ adb shell ls /sys/bus/usb/devices/
+> ls: /sys/bus/usb/devices/: No such file or directory
+> $ adb shell ls /dev/bus/usb
+> ls: /dev/bus/usb: No such file or directory
+> $ adb shell 'ls /sys/module/ | grep -i usb'
+> (空 —— 一个 USB 模块都没有)
+> ```
+>
+> 客户机是 Linux 6.1.90 aarch64，但 `CONFIG_USB_SUPPORT` **未启用**，
+> `init.svc.usbd` 也是 `stopped`。Android 的 `UsbManager` 拿不到任何设备，
+> App 里点「扫描 USB 设备」永远是 `0 个`（已实测）。
+> 它的虚拟机确实是 VirtualBox 内核（`C:\Program Files\MuMuNxVbox\`），
+> VirtualBox 本身也有 USB 透传，但**客户机内核没有 USB 栈，透过去也没人认**。
+> 这条路到此为止。
+>
+> 真想在全虚拟环境里测 USB 透传，需要客户机内核带 USB 支持的镜像，
+> 也就是 **VirtualBox + Android-x86** 那一套。
 
 卸载（不想留的话）：
 
