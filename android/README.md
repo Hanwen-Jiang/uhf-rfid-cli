@@ -72,9 +72,8 @@ USB Host API 读写原始 USB 端点。库的作者原话：
 | 文件 | 作用 |
 |---|---|
 | `RfidFrame.java` | 协议编解码，`re/rfidframe.py` 的 Java 移植。纯 Java，不依赖 Android |
-| `Transport.java` | 传输层基类（收发 + 累积解析），USB 和 TCP 共用 |
+| `Transport.java` | 传输层基类（收发 + 累积解析） |
 | `SerialTransport.java` | USB-OTG 串口（usb-serial-for-android），115200 8N1 |
-| `TcpTransport.java` | WiFi：连读写器网口，或连电脑上的桥 |
 | `RfidReader.java` | 高层操作：复位、射频参数、蜂鸣器、读 EPC/TID、写 EPC/TID |
 | `RfidSession.java` | 全局单例，持有连接 —— 让 Activity 重建后连接不丢 |
 | `MainActivity.java` | 界面 + USB 权限 + 后台线程 |
@@ -82,7 +81,8 @@ USB Host API 读写原始 USB 端点。库的作者原话：
 
 ## 在模拟器里调试
 
-模拟器**测不了 USB 直连**（见下），但测界面和 WiFi 那条路很好用。
+**这个 App 只有 USB-OTG 一种连接方式，而模拟器透传不了 USB 串口**，
+所以模拟器只能用来调界面，**要测 USB 模式必须用真机**。
 
 ```bash
 # 列出可用 AVD
@@ -104,15 +104,9 @@ USB Host API 读写原始 USB 端点。库的作者原话：
 adb shell wm density 200      # 480px / 200dpi * 160 ≈ 384dp，正常手机宽度
 ```
 
-配对调试（模拟器连宿主机的假读写器）：
+装上去点「扫描 USB 设备」会显示 `0 个`，这是正常的 —— 模拟器里没有 USB 总线。
 
-```bash
-python re/mock_reader_tcp.py --port 18080     # 宿主机上起假读写器
-adb reverse tcp:18080 tcp:18080               # 模拟器的 18080 转到宿主机
-# App 里选「WiFi」，IP 填 127.0.0.1，端口 18080，点连接
-```
-
-## 关于模拟器的 USB 透传
+## 关于模拟器的 USB 透传（结论：走不通）
 
 官方模拟器**有**这个选项：
 
@@ -130,12 +124,20 @@ Android_USB_Assistant_Install.bat     :: pnputil -i -a Android_USB_Assistant.Inf
 UsbAssist_Install.bat                 :: 装并启动 UsbAssist 内核服务
 ```
 
-**实测结论（Windows 11 26200 + emulator 37.1.11 + WHPX）：装完驱动、UsbAssist
-服务也在 RUNNING、驱动错误确实消失了，但模拟器一加 `-usb-passthrough` 就立刻
-退出；不加参数则正常启动。** 所以这台机器上透传走不通，**USB 直连模式只能在
-真手机上验证**。
+**实测（Windows 11 26200 + emulator 37.1.11 + WHPX，CH341 = 1a86:5523）：**
+驱动装好、`UsbAssist` 服务 `RUNNING`、那个驱动错误确实消失了，但
 
-卸载（如果不想留）：
+- 加 `-usb-passthrough` → **模拟器立刻退出**；去掉参数则正常启动；
+- 不带透传时，客户机 `/dev/bus/usb/001/` 里只有根集线器，扫不到任何设备。
+
+所以这台机器上透传不可用，**USB 模式只能在真手机上验证**。
+
+> 关于 MuMu：查了官方帮助和社区，**没有找到 MuMu 支持 USB 设备透传的说明**
+> （它跟 USB 相关的只有 adb 调试和手柄）。所以不建议为这件事装 MuMu。
+> 真想在全虚拟环境里测 USB 透传，可行的是 **VirtualBox + Android-x86**
+> —— VirtualBox 有完整的 USB 透传筛选器，但那是另一套搭建工作。
+
+卸载（不想留的话）：
 
 ```bat
 cd %ANDROID_HOME%\emulator\drivers

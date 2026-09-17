@@ -16,7 +16,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.RadioButton;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -46,8 +45,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView statusText, epcText, tidText, logText;
     private Button connectBtn, readBtn, writeBtn;
-    private RadioButton usbRadio, tcpRadio;
-    private EditText antennaEdit, powerEdit, hostEdit, portEdit, epcEdit, tidEdit;
+    private EditText antennaEdit, powerEdit, epcEdit, tidEdit;
     private CheckBox restartCheck, muteCheck;
 
     private final BroadcastReceiver permReceiver = new BroadcastReceiver() {
@@ -95,12 +93,8 @@ public class MainActivity extends AppCompatActivity {
         readBtn = findViewById(R.id.readBtn);
         writeBtn = findViewById(R.id.writeBtn);
 
-        usbRadio = findViewById(R.id.usbRadio);
-        tcpRadio = findViewById(R.id.tcpRadio);
         antennaEdit = findViewById(R.id.antennaEdit);
         powerEdit = findViewById(R.id.powerEdit);
-        hostEdit = findViewById(R.id.hostEdit);
-        portEdit = findViewById(R.id.portEdit);
         epcEdit = findViewById(R.id.epcEdit);
         tidEdit = findViewById(R.id.tidEdit);
 
@@ -212,11 +206,7 @@ public class MainActivity extends AppCompatActivity {
             setStatus(session.lastStatus);
             return;
         }
-        if (tcpRadio.isChecked()) {
-            doConnect();
-        } else {
-            requestPermissionThenConnect();
-        }
+        requestPermissionThenConnect();
     }
 
     private void requestPermissionThenConnect() {
@@ -227,7 +217,7 @@ public class MainActivity extends AppCompatActivity {
                     + "① OTG 线插好（要能传数据，不是只能充电的）\n"
                     + "② 手机支持 USB Host\n"
                     + "③ 小米/红米：「设置 → 更多设置 → OTG」要打开，默认 10 分钟自动关\n"
-                    + "④ 模拟器测不了 USB 串口，请切到「WiFi 连接」");
+                    + "④ 模拟器透传不了 USB 串口，要真机才能测 USB 模式");
             return;
         }
         for (com.hoho.android.usbserial.driver.UsbSerialDriver d : drivers) {
@@ -247,9 +237,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void doConnect() {
-        final boolean useTcp = tcpRadio.isChecked();
-        final String host = hostEdit.getText().toString().trim();
-        final int tcpPort = parseInt(portEdit, 8080);
         final int ant = parseInt(antennaEdit, 1);
         final int pw = parseInt(powerEdit, 26);
         final boolean doReset = restartCheck.isChecked();
@@ -258,9 +245,7 @@ public class MainActivity extends AppCompatActivity {
         setStatus("正在连接…");
         worker.execute(() -> {
             try {
-                Transport t = useTcp
-                        ? new TcpTransport(host, tcpPort)
-                        : new SerialTransport(usbManager, granted);
+                Transport t = new SerialTransport(usbManager, granted);
                 RfidReader reader = session.use(t);
                 t.open();
 
