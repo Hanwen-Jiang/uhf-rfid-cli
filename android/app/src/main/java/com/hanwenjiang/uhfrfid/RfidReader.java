@@ -12,14 +12,14 @@ public class RfidReader {
     /** 0x8A 应答里的 0x53 数据帧载荷长度（37）。 */
     private static final int PAYLOAD_53_LEN = 37;
 
-    private final SerialTransport io;
+    private final Transport io;
     private final LogSink log;
 
     public interface LogSink {
         void line(String s);
     }
 
-    public RfidReader(SerialTransport io, LogSink log) {
+    public RfidReader(Transport io, LogSink log) {
         this.io = io;
         this.log = log;
     }

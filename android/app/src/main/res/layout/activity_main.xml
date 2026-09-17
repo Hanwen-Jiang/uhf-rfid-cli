@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  根布局必须带 fitsSystemWindows="true"。
+
+  targetSdk 35 起 Android 强制「边到边」(edge-to-edge) 显示：内容会画到状态栏
+  和导航栏底下，ActionBar 也会压在上面 —— 表现就是顶部那一排按钮被顶栏挡住。
+  fitsSystemWindows 让框架自动给根布局加上状态栏/导航栏高度的内边距。
+-->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:fitsSystemWindows="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -17,11 +25,60 @@
             android:textSize="22sp"
             android:textStyle="bold" />
 
+        <!-- 连接方式：USB-OTG 直连 / WiFi 连读写器或电脑上的桥 -->
+        <RadioGroup
+            android:id="@+id/transportGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/usbRadio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:checked="true"
+                android:text="@string/mode_usb" />
+
+            <RadioButton
+                android:id="@+id/tcpRadio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/mode_tcp" />
+        </RadioGroup>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/hostEdit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:hint="@string/host_hint"
+                android:inputType="textNoSuggestions"
+                android:text="192.168.0.178" />
+
+            <EditText
+                android:id="@+id/portEdit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:hint="@string/port_hint"
+                android:inputType="number"
+                android:text="8080" />
+        </LinearLayout>
+
         <!-- 连接 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="4dp"
             android:orientation="horizontal">
 
             <Button
@@ -39,6 +96,12 @@
                 android:layout_marginStart="8dp"
                 android:text="@string/read" />
         </LinearLayout>
+
+        <Button
+            android:id="@+id/scanUsbBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/scan_usb" />
 
         <!-- 射频参数 -->
         <LinearLayout

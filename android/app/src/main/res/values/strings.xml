@@ -5,6 +5,11 @@
     <string name="disconnect">断开</string>
     <string name="read">读 EPC/TID</string>
     <string name="write">写入 EPC / TID</string>
+    <string name="mode_usb">USB 直连</string>
+    <string name="mode_tcp">WiFi</string>
+    <string name="host_hint">读写器或桥的 IP</string>
+    <string name="port_hint">端口</string>
+    <string name="scan_usb">扫描 USB 设备（排查插上没反应）</string>
     <string name="antenna">天线口</string>
     <string name="power">功率</string>
     <string name="restart">连接后复位</string>

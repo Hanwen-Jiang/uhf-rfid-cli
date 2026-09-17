@@ -2,30 +2,35 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- USB Host：手机通过 OTG 线直接跟读写器讲串口 -->
-    <uses-feature android:name="android.hardware.usb.host" android:required="true" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
+    <!-- WiFi 模式：连读写器自带的网口，或连电脑/树莓派上的桥 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
         android:theme="@style/Theme.UhfRfid">
 
+        <!--
+          launchMode=singleTop + 完整的 configChanges：转屏、插拔 USB、切换深色模式
+          等都不会重建 Activity，也就不会出现「用着用着 App 自己重启、连接掉了」。
+
+          另外**故意不加** USB_DEVICE_ATTACHED 的 intent-filter：加了之后每次插上
+          USB 设备系统就会再拉起一个实例，原来那个连接就废了 —— 这正是之前
+          「连接上又断开」的原因之一。现在插上设备后由用户点「连接」。
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-            <!-- 插上 USB 串口设备时直接拉起本 App -->
-            <intent-filter>
-                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
-            </intent-filter>
-            <meta-data
-                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-                android:resource="@xml/usb_device_filter" />
         </activity>
     </application>
 

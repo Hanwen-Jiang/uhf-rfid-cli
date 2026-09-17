@@ -16,8 +16,8 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.RadioButton;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -27,10 +27,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 单页界面：连接读写器 → 读 EPC/TID → 可选写 EPC/TID。
+ * 单页界面：连接 → 读 EPC/TID → 可选写 EPC/TID。
  *
- * <p>所有串口操作都放到后台线程，主线程只更新界面 —— Android 上主线程碰 I/O
- * 会直接 ANR。
+ * <p>连接状态放在 {@link RfidSession} 单例里，所以 Activity 被系统重建
+ * （转屏、插拔 USB、改系统设置）之后能接回原来的连接，不会看着像"自己重启了"。
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -41,13 +41,13 @@ public class MainActivity extends AppCompatActivity {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final Set<UsbDevice> granted = new HashSet<>();
 
-    private SerialTransport io;
-    private RfidReader reader;
+    private RfidSession session;
     private UsbManager usbManager;
 
     private TextView statusText, epcText, tidText, logText;
     private Button connectBtn, readBtn, writeBtn;
-    private EditText antennaEdit, powerEdit, epcEdit, tidEdit;
+    private RadioButton usbRadio, tcpRadio;
+    private EditText antennaEdit, powerEdit, hostEdit, portEdit, epcEdit, tidEdit;
     private CheckBox restartCheck, muteCheck;
 
     private final BroadcastReceiver permReceiver = new BroadcastReceiver() {
@@ -65,12 +65,24 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    /** USB 被拔掉时立刻把连接收掉，别让界面显示"已连接"但实际发不出数据。 */
+    private final BroadcastReceiver detachReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context ctx, Intent intent) {
+            if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(intent.getAction())) {
+                if (session.transport instanceof SerialTransport) {
+                    session.onTransportLost("USB 设备被拔掉了");
+                }
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        io = new SerialTransport();
+        session = RfidSession.get();
         usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
 
         statusText = findViewById(R.id.statusText);
@@ -83,51 +95,128 @@ public class MainActivity extends AppCompatActivity {
         readBtn = findViewById(R.id.readBtn);
         writeBtn = findViewById(R.id.writeBtn);
 
+        usbRadio = findViewById(R.id.usbRadio);
+        tcpRadio = findViewById(R.id.tcpRadio);
         antennaEdit = findViewById(R.id.antennaEdit);
         powerEdit = findViewById(R.id.powerEdit);
+        hostEdit = findViewById(R.id.hostEdit);
+        portEdit = findViewById(R.id.portEdit);
         epcEdit = findViewById(R.id.epcEdit);
         tidEdit = findViewById(R.id.tidEdit);
 
         restartCheck = findViewById(R.id.restartCheck);
         muteCheck = findViewById(R.id.muteCheck);
 
-        readBtn.setEnabled(false);
-        writeBtn.setEnabled(false);
-
         connectBtn.setOnClickListener(v -> connectOrDisconnect());
         readBtn.setOnClickListener(v -> readOnce());
         writeBtn.setOnClickListener(v -> writeOnce());
-
-        reader = new RfidReader(io, this::appendLog);
+        findViewById(R.id.scanUsbBtn).setOnClickListener(
+                v -> setStatus(usbDiagnostics()));
 
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(permReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
             registerReceiver(permReceiver, filter);
+        }
+
+        session.listener = reason -> ui.post(() -> {
+            reflectConnectionState();
+            setStatus("连接已断开：" + reason);
+        });
+
+        // Activity 被重建后把上次的状态恢复回来。
+        // 顺序很重要：先让 reflectConnectionState() 按连接状态刷按钮，
+        // 再用 lastStatus 覆盖文字 —— 反过来的话读取/写入的报告会被
+        // 「已连接 xxx」冲掉。
+        epcText.setText(session.lastEpc);
+        tidText.setText(session.lastTid);
+        reflectConnectionState();
+        if (session.lastStatus != null && !session.lastStatus.isEmpty()) {
+            setStatus(session.lastStatus);
         }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        try { unregisterReceiver(permReceiver); } catch (IllegalArgumentException ignored) { }
-        io.close();
-        worker.shutdownNow();
+        session.listener = null;
+        try {
+            unregisterReceiver(permReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
+        // 注意：这里**不**关闭连接 —— 转屏、切后台都会走到这里，
+        // 关掉的话就成了「用着用着就断了」。真正断开的时机是用户点「断开」。
+        worker.shutdown();
+    }
+
+    /** 按 session 的实际状态刷新按钮和文字。 */
+    private void reflectConnectionState() {
+        boolean connected = session.isConnected();
+        readBtn.setEnabled(connected);
+        writeBtn.setEnabled(connected);
+        connectBtn.setText(connected ? R.string.disconnect : R.string.connect);
+        if (connected && session.transport != null) {
+            setStatus("已连接 " + session.transport.describe());
+        }
+    }
+
+    /**
+     * 扫描 USB 总线，把看到的设备全列出来 —— 不管驱动认不认识它。
+     *
+     * <p>这是排查「插上没反应」最有用的东西：如果这里能看到 1a86:5523（CH341），
+     * 说明 USB 这一层通了，问题在权限或驱动匹配；如果一个设备都没有，
+     * 那就是 OTG 线/手机不支持 USB Host/系统 OTG 开关没开。
+     */
+    private String usbDiagnostics() {
+        StringBuilder sb = new StringBuilder();
+        java.util.HashMap<String, UsbDevice> devices = usbManager.getDeviceList();
+        sb.append("手机上看到的 USB 设备：").append(devices.size()).append(" 个\n");
+        if (devices.isEmpty()) {
+            sb.append("  一个都没有。\n"
+                    + "  → 检查 OTG 线（要能传数据）、手机是否支持 USB Host、\n"
+                    + "     小米/红米要在「设置 → 更多设置 → OTG」里打开。");
+            return sb.toString();
+        }
+        java.util.Set<String> probed = new HashSet<>();
+        for (com.hoho.android.usbserial.driver.UsbSerialDriver d
+                : SerialTransport.listDrivers(usbManager)) {
+            probed.add(String.format("%04x:%04x", d.getDevice().getVendorId(),
+                    d.getDevice().getProductId()));
+        }
+        for (UsbDevice d : devices.values()) {
+            String vidpid = String.format("%04x:%04x", d.getVendorId(), d.getProductId());
+            sb.append("  ").append(vidpid)
+              .append("  ").append(SerialTransport.describe(d))
+              .append("\n      接口数=").append(d.getInterfaceCount())
+              .append("  权限=").append(usbManager.hasPermission(d) ? "有" : "无")
+              .append("  串口驱动=").append(probed.contains(vidpid) ? "认识 ✓" : "不认识 ✗")
+              .append("\n");
+        }
+        if (probed.isEmpty()) {
+            sb.append("  没有设备被串口驱动认出来。\n"
+                    + "  → CH340/CH341 是 1a86:5523 或 1a86:7523，"
+                    + "如果你看到它但显示「不认识」，把这个结果发我。");
+        }
+        return sb.toString();
     }
 
     // ------------------------------------------------------------ 连接
 
     private void connectOrDisconnect() {
-        if (io.isOpen()) {
-            io.close();
-            readBtn.setEnabled(false);
-            writeBtn.setEnabled(false);
-            connectBtn.setText(R.string.connect);
-            setStatus("已断开。");
+        if (session.isConnected()) {
+            session.disconnect();
+            session.lastStatus = "已断开。";
+            reflectConnectionState();
+            setStatus(session.lastStatus);
             return;
         }
-        requestPermissionThenConnect();
+        if (tcpRadio.isChecked()) {
+            doConnect();
+        } else {
+            requestPermissionThenConnect();
+        }
     }
 
     private void requestPermissionThenConnect() {
@@ -135,11 +224,12 @@ public class MainActivity extends AppCompatActivity {
                 SerialTransport.listDrivers(usbManager);
         if (drivers.isEmpty()) {
             setStatus("没找到 USB 串口设备。\n"
-                    + "检查：① OTG 线插好 ② 读写器电源开了 "
-                    + "③ 适配器是 CH340/CP210x/FTDI 这类。");
+                    + "① OTG 线插好（要能传数据，不是只能充电的）\n"
+                    + "② 手机支持 USB Host\n"
+                    + "③ 小米/红米：「设置 → 更多设置 → OTG」要打开，默认 10 分钟自动关\n"
+                    + "④ 模拟器测不了 USB 串口，请切到「WiFi 连接」");
             return;
         }
-        // 先看有没有已经授权的
         for (com.hoho.android.usbserial.driver.UsbSerialDriver d : drivers) {
             if (usbManager.hasPermission(d.getDevice())) granted.add(d.getDevice());
         }
@@ -149,41 +239,55 @@ public class MainActivity extends AppCompatActivity {
         }
         UsbDevice dev = drivers.get(0).getDevice();
         setStatus("请求 USB 权限：" + SerialTransport.describe(dev) + " …");
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
         PendingIntent pi = PendingIntent.getBroadcast(
-                this, 0, new Intent(ACTION_USB_PERMISSION),
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                this, 0, new Intent(ACTION_USB_PERMISSION), flags);
         usbManager.requestPermission(dev, pi);
     }
 
     private void doConnect() {
-        setStatus("正在打开串口…");
+        final boolean useTcp = tcpRadio.isChecked();
+        final String host = hostEdit.getText().toString().trim();
+        final int tcpPort = parseInt(portEdit, 8080);
+        final int ant = parseInt(antennaEdit, 1);
+        final int pw = parseInt(powerEdit, 26);
+        final boolean doReset = restartCheck.isChecked();
+        final boolean mute = muteCheck.isChecked();
+
+        setStatus("正在连接…");
         worker.execute(() -> {
             try {
-                io.open(usbManager, granted);
-                int ant = parseInt(antennaEdit, 1);
-                int pw = parseInt(powerEdit, 26);
-                boolean doReset = restartCheck.isChecked();
-                boolean mute = muteCheck.isChecked();
+                Transport t = useTcp
+                        ? new TcpTransport(host, tcpPort)
+                        : new SerialTransport(usbManager, granted);
+                RfidReader reader = session.use(t);
+                t.open();
 
                 if (doReset) reader.restart();
                 reader.clearEpcMatch();
                 if (mute) reader.setBeep(false);
                 reader.setAntenna(ant);
                 reader.setPower(pw);
-
                 byte[] ver = reader.readVersion();
-                final String msg = "已连接 " + io.deviceName
+
+                appendLog(t.takeLog());
+                String msg = "已连接 " + t.describe()
                         + (ver != null ? "\n固件 " + RfidFrame.hexSpaced(ver) : "")
                         + "\n天线 " + ant + "  功率 " + pw
                         + (mute ? "  蜂鸣器已关" : "");
+                session.lastStatus = msg;
                 ui.post(() -> {
+                    reflectConnectionState();
                     setStatus(msg);
-                    connectBtn.setText(R.string.disconnect);
-                    readBtn.setEnabled(true);
-                    writeBtn.setEnabled(true);
                 });
             } catch (Exception e) {
-                ui.post(() -> setStatus("连接失败：" + e.getMessage()));
+                String why = e.getMessage() == null ? e.toString() : e.getMessage();
+                session.lastStatus = "连接失败：" + why;
+                ui.post(() -> {
+                    reflectConnectionState();
+                    setStatus(session.lastStatus);
+                });
             }
         });
     }
@@ -195,22 +299,33 @@ public class MainActivity extends AppCompatActivity {
         worker.execute(() -> {
             try {
                 long t0 = System.currentTimeMillis();
-                RfidFrame.TagId id = reader.readEpcTid();
+                RfidFrame.TagId id = session.reader.readEpcTid();
                 long dt = System.currentTimeMillis() - t0;
+                String raw = session.transport.takeLog();
+                if (id.ok()) {
+                    session.lastEpc = id.epc;
+                    session.lastTid = id.tid == null ? "(应答里没有)" : id.tid;
+                    session.lastStatus = "读到标签（" + dt + " ms）";
+                } else {
+                    session.lastEpc = "—";
+                    session.lastTid = "—";
+                    session.lastStatus = "没读到标签。\n把标签贴近天线，"
+                            + "或换天线口/功率再试（蜂鸣器每读到一次会响一声）。";
+                }
+                final String s = session.lastStatus;
                 ui.post(() -> {
-                    if (id.ok()) {
-                        epcText.setText(id.epc);
-                        tidText.setText(id.tid == null ? "(应答里没有)" : id.tid);
-                        setStatus("读到标签（" + dt + " ms）");
-                    } else {
-                        epcText.setText("—");
-                        tidText.setText("—");
-                        setStatus("没读到标签。\n把标签贴近天线，"
-                                + "或换天线口/功率再试（蜂鸣器每读到一次会响一声）。");
-                    }
+                    epcText.setText(session.lastEpc);
+                    tidText.setText(session.lastTid);
+                    setStatus(s);
+                    appendLog(raw);
                 });
             } catch (Exception e) {
-                ui.post(() -> setStatus("查询失败：" + e.getMessage()));
+                String why = e.getMessage() == null ? e.toString() : e.getMessage();
+                session.lastStatus = "查询失败：" + why;
+                ui.post(() -> {
+                    setStatus(session.lastStatus);
+                    reflectConnectionState();
+                });
             }
         });
     }
@@ -229,15 +344,24 @@ public class MainActivity extends AppCompatActivity {
             try {
                 byte[] epc = RfidFrame.unhex(epcHex);
                 byte[] tid = RfidFrame.unhex(tidHex);
-                String report = reader.writeEpcAndTid(epc, 2, tid, 0);
+                String report = session.reader.writeEpcAndTid(epc, 2, tid, 0);
+                String raw = session.transport.takeLog();
+                session.lastStatus = report;
                 ui.post(() -> {
                     setStatus(report);
+                    appendLog(raw);
                     readOnce();
                 });
             } catch (IllegalArgumentException e) {
-                ui.post(() -> setStatus("Hex 格式不对：" + e.getMessage()));
+                session.lastStatus = "Hex 格式不对：" + e.getMessage();
+                ui.post(() -> setStatus(session.lastStatus));
             } catch (Exception e) {
-                ui.post(() -> setStatus("写入失败：" + e.getMessage()));
+                String why = e.getMessage() == null ? e.toString() : e.getMessage();
+                session.lastStatus = "写入失败：" + why;
+                ui.post(() -> {
+                    setStatus(session.lastStatus);
+                    reflectConnectionState();
+                });
             }
         });
     }
@@ -257,12 +381,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void appendLog(String s) {
-        ui.post(() -> {
-            logText.append(s + "\n");
-            int scroll = logText.getLayout() == null ? 0
-                    : logText.getLayout().getLineTop(logText.getLineCount())
-                      - logText.getHeight();
-            if (scroll > 0) logText.scrollTo(0, scroll);
-        });
+        if (s == null || s.isEmpty()) return;
+        logText.append(s);
+        View v = findViewById(R.id.logText);
+        if (v instanceof TextView) {
+            TextView tv = (TextView) v;
+            if (tv.getLayout() != null) {
+                int scroll = tv.getLayout().getLineTop(tv.getLineCount()) - tv.getHeight();
+                if (scroll > 0) tv.scrollTo(0, scroll);
+            }
+        }
     }
 }
