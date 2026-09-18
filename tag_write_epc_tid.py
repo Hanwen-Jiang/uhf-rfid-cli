@@ -62,6 +62,9 @@ WORDS = 6                  # 数据长度（字），6 字 = 12 字节 = 24 个 
 TIMEOUT = 1.0
 RETRIES = 2
 
+# 写入失败（例如状态码 0x41）就重写，最多这么多轮，以回读校验为准
+WRITE_ATTEMPTS = 8
+
 
 # ---------------------------------------------------------------- 小工具
 def hr(title=''):
@@ -424,6 +427,20 @@ def cmd_ok(frames):
 
 
 # ---------------------------------------------------------------- 单步操作
+def write_status(body):
+    """从 0x82 应答里取出状态码。返回 (状态码, 是否成功)。
+
+    成功时是**长应答**：`00 <字数2> 10 <PC> <数据> <CRC> 10 01`，状态在第 3 字节；
+    失败时只有**一个字节**，就是错误码本身（实测 0x41 = 写不进去）。
+    注意别把"收到应答"当成"写成功" —— 0x41 也是有应答的。
+    """
+    if not body:
+        return None, False
+    if len(body) >= 3:
+        return body[2], body[2] == 0x10
+    return body[0], body[0] == 0x10
+
+
 def do_write(reader, label, bank, start_word, data, timeout=None, show_frame=True):
     hr('写入 %s 区' % label)
     words = len(data) // 2
@@ -446,12 +463,46 @@ def do_write(reader, label, bank, start_word, data, timeout=None, show_frame=Tru
                              timeout=timeout)
     if not frames:
         print('  结果      : 无应答（超时）✗')
-        return False
+        return False, False
     body = frames[0]['payload']
+    code, ok = write_status(body)
     print('  应答      : %s' % (hexs(body) if body else '(空)'))
     print('  应答解读  : %s' % interpret_reply(F.CMD['write'], body))
-    print('  结果      : 读写器已回应 ✓')
-    return True
+    print('  结果      : %s' % ('写入已被接受 ✓' if ok else
+                                '写入失败（状态码 0x%02X）✗' % (code or 0)))
+    return ok, True
+
+
+def write_and_verify(reader, label, bank, start_word, data, timeout=None,
+                     verify=True, attempts=WRITE_ATTEMPTS):
+    """写一个区并回读校验，**不成功就重写，直到成功**（最多 attempts 轮）。
+
+    为什么不看写入应答就完事：0x41 这种失败是偶发的，同一帧重发一次往往就过了；
+    也遇到过应答说成功但内容没落地的情况。所以一律以**回读**为准。
+    """
+    for rnd in range(1, attempts + 1):
+        if rnd > 1:
+            print()
+            print('  ── 第 %d/%d 轮重写 %s 区 ──' % (rnd, attempts, label))
+        ok, replied = do_write(reader, label, bank, start_word, data,
+                               timeout=timeout, show_frame=(rnd == 1))
+        if not verify:
+            if ok:
+                return True
+            if not replied:
+                return False        # 完全没应答，重写也是白搭
+            continue
+        got = do_verify(reader, label, bank, start_word, data, timeout=timeout)
+        if got:
+            return True
+        # 一个应答都没有 = 场上没标签，重写 8 轮只是浪费时间，两轮就收手
+        if not replied and rnd >= 2:
+            print('  连续没应答 —— 多半是场上没有标签，不再重写')
+            return False
+        print('  第 %d 轮没写进去，重写…' % rnd)
+        time.sleep(0.2)
+    print('  重写 %d 轮仍未成功 ✗' % attempts)
+    return False
 
 
 def do_verify(reader, label, bank, start_word, expect, timeout=None):
@@ -696,83 +747,38 @@ def clear_epc_match(reader, timeout_air):
                     expect=F.CMD['set_epc_match'], timeout=timeout_air, retries=0)
 
 
-def read_tag_epc(reader, timeout_air):
-    """尽力读一次场上标签的 EPC，用于设置匹配。返回 EPC 字节或 None。"""
-    # 方式一：缓存盘存后取缓冲
-    reader.transact(F.CMD['buffered_inventory'], bytes([1]),
-                    expect=F.CMD['buffered_inventory'], timeout=timeout_air, retries=0)
-    time.sleep(0.5)
-    frames = reader.transact(F.CMD['get_and_clear_buffer'],
-                             expect=F.CMD['get_and_clear_buffer'],
-                             timeout=timeout_air, retries=0)
-    if frames:
-        body = frames[0]['payload']
-        if body:
-            print('  缓冲应答 (%d 字节): %s' % (len(body), hexs(body)))
-            # 常见布局：首字节为数量，其后为连续的 12 字节 EPC
-            for off in (0, 1):
-                rest = body[off:]
-                if len(rest) >= 12:
-                    return rest[:12]
-    # 方式二：直接读 EPC 区（起始字 2，6 字）
-    frames = reader.transact(F.CMD['read'], F.payload_read(1, 2, 6, PASSWORD),
-                             expect=F.CMD['read'], timeout=timeout_air, retries=0)
-    if frames:
-        body = frames[0]['payload']
-        if len(body) >= 12:
-            print('  直读 EPC 区: %s' % hexs(body[:12]))
-            return body[:12]
-    return None
+def probe_epc(reader, timeout_air, tries=2):
+    """读一次 EPC 区，确认场上有标签并拿到它的完整 EPC。返回 EPC 字节或 None。
 
+    这是写标签前唯一的"空中检查"。**不要用实时盘存（0x80/0x92/0x91）那套**：
+    它会让读写器持续往串口刷空盘存帧（实测几百帧），既慢又刷屏，而且拿到的
+    EPC 还可能被截断。直接读 EPC 区只要一来一回，快且拿到的就是完整 EPC。
 
-def check_inventory(reader, timeout_air):
-    """盘存一次，看场上有没有标签。返回 (标签数, 读到的EPC)。"""
-    hr('空中检查：盘存')
-    frames = reader.transact(F.CMD['buffered_inventory'], bytes([1]),
-                             expect=F.CMD['buffered_inventory'],
-                             timeout=timeout_air, retries=0)
-    if frames:
-        body = frames[0]['payload']
-        print('  启动缓存盘存应答: %s' % (hexs(body) if body else '(空)'))
-    else:
-        print('  启动缓存盘存: 无应答')
+    读应答是**合并记录**：
+        00 01 <len> <PC 2字节> <EPC 12字节> <CRC 2字节> <TID 12字节> …
+    所以 EPC 在**偏移 5**。（以前这里写的是 body[:12]，取到的是
+    `00 01 1C 30 …` 这种头部字节，拿去设匹配会匹配不上。）
 
-    time.sleep(0.6)
-    frames = reader.transact(F.CMD['get_tag_count'], expect=F.CMD['get_tag_count'],
-                             timeout=timeout_air, retries=0)
-    count = None
-    if frames:
-        body = frames[0]['payload']
-        print('  标签数量应答    : %s' % (hexs(body) if body else '(空)'))
-        if body:
-            count = body[0] | (body[1] << 8 if len(body) > 1 else 0)
-    else:
-        print('  标签数量: 无应答')
-
-    epc = None
-    frames = reader.transact(F.CMD['get_and_clear_buffer'],
-                             expect=F.CMD['get_and_clear_buffer'],
-                             timeout=timeout_air, retries=0)
-    if frames:
-        body = frames[0]['payload']
-        print('  标签缓冲应答    : %s' % (hexs(body) if body else '(空)'))
-        for off in (0, 1):
-            if len(body) - off >= 12:
-                epc = body[off:off + 12]
-                break
-
-    if epc is None:
+    ⚠ 也不能改用 0x8A 自定义盘存：实测 0x8A 之后紧接着写，读写器会稳定回
+    0x41 并且写不进去。
+    """
+    hr('空中检查：读 EPC 区')
+    for i in range(tries):
         frames = reader.transact(F.CMD['read'], F.payload_read(1, 2, 6, PASSWORD),
-                                 expect=F.CMD['read'], timeout=timeout_air, retries=0)
+                                 expect=F.CMD['read'], timeout=timeout_air,
+                                 retries=0)
         if frames:
             body = frames[0]['payload']
-            print('  读 EPC 区       : %s' % (hexs(body) if body else '(空)'))
-            if len(body) >= 12:
-                epc = body[:12]
-
-    reader.send_only(F.CMD['stop_inventory'])
-    time.sleep(0.1)
-    return count, epc
+            print('  应答      : %s' % (hexs(body) if body else '(空)'))
+            if len(body) >= 5 + 12:
+                epc = body[5:5 + 12]
+                if any(epc):
+                    print('  当前 EPC  : %s' % clean_hex(epc.hex()))
+                    return epc
+        if i + 1 < tries:
+            time.sleep(0.2)
+    print('  读不到 EPC —— 场上可能没有标签')
+    return None
 
 
 def report_air_failure():
@@ -1048,21 +1054,22 @@ def _run(argv=None):
     reader = Reader(ser, addr=a.addr, timeout=a.timeout)
     rc = 0
     try:
-        # 读一下固件版本，确认链路通
         # ---- 复位读写器（原应用连接后的预处理）--------------------------
+        # restart_reader() 内部已经用 0x72 轮询确认过链路了，所以复位之后
+        # 不必再单独做一次「链路检查」—— 那是同一帧读两遍。
         if not a.no_restart:
             hr('复位读写器（对齐原应用的连接预处理）')
-            restart_reader(reader, settle=a.restart_wait)
-
-        hr('链路检查：读固件版本')
-        frames = reader.transact(F.CMD['version'], expect=F.CMD['version'])
-        if frames:
-            body = frames[0]['payload']
-            print('  固件版本  : %s' % decode_version(body))
+            if not restart_reader(reader, settle=a.restart_wait):
+                rc = 4
         else:
-            print('  读版本无应答 —— 请检查串口号、波特率、接线（TX/RX 是否交叉）。')
-            print('  仍将继续尝试写入。')
-            rc = 4
+            hr('链路检查：读固件版本')
+            frames = reader.transact(F.CMD['version'], expect=F.CMD['version'])
+            if frames:
+                print('  固件版本  : %s' % decode_version(frames[0]['payload']))
+            else:
+                print('  读版本无应答 —— 请检查串口号、波特率、接线（TX/RX 是否交叉）。')
+                print('  仍将继续尝试写入。')
+                rc = 4
 
         # ---- 诊断模式：只看不应答，不写入 -------------------------------
         if a.diagnose:
@@ -1077,13 +1084,14 @@ def _run(argv=None):
             init_reader(reader, a, air_timeout)
 
         # ---- 空中检查：场上有没有标签 -----------------------------------
+        # 一次 0x81 读就够：既确认有标签，又拿到完整 EPC 用于设匹配。
         tag_epc = None
         if not a.skip_check:
-            count, tag_epc = check_inventory(reader, air_timeout)
-            if tag_epc is None and count in (None, 0):
+            tag_epc = probe_epc(reader, air_timeout)
+            if tag_epc is None:
                 print()
-                print('  ⚠ 没有读到任何标签。写操作必须有标签在场才能应答，')
-                print('    如果现在继续，大概率两个写入都会超时。')
+                print('  ⚠ 没读到标签。写操作必须有标签在场才能应答，')
+                print('    如果现在继续，大概率两个写入都会失败。')
                 print('    可以试：--antenna 1 --power 30 提高读到的机会，')
                 print('    或先跑 python rfidctl.py --port %s info 看看链路。' % port)
                 if not a.yes:
@@ -1120,18 +1128,23 @@ def _run(argv=None):
             print('  说明：匹配值不对时，读写器会对内存命令完全不回应答。')
 
         # ---- 操作 1：写 EPC 区 ------------------------------------------
-        ok1 = do_write(reader, 'EPC', EPC_BANK, a.epc_start, epc_data,
-                       timeout=air_timeout)
-        if ok1 and not a.no_verify:
-            do_verify(reader, 'EPC', EPC_BANK, a.epc_start, epc_data,
-                      timeout=air_timeout)
+        # 开场就没读到标签的话，别指望重写能变出来，两轮就收手
+        tries = WRITE_ATTEMPTS if tag_epc else 2
+        ok1 = write_and_verify(reader, 'EPC', EPC_BANK, a.epc_start, epc_data,
+                              timeout=air_timeout, verify=not a.no_verify,
+                              attempts=tries)
+
+        # EPC 变了，匹配得跟着更新，否则后面写 TID 锁定的还是旧 EPC
+        if a.match_epc and ok1:
+            new_epc = probe_epc(reader, air_timeout, tries=1)
+            if new_epc and new_epc != tag_epc:
+                print('\n  EPC 已变，更新匹配')
+                arm_epc_match(reader, new_epc, air_timeout)
 
         # ---- 操作 2：写 TID 区 ------------------------------------------
-        ok2 = do_write(reader, 'TID', TID_BANK, a.tid_start, tid_data,
-                       timeout=air_timeout)
-        if ok2 and not a.no_verify:
-            do_verify(reader, 'TID', TID_BANK, a.tid_start, tid_data,
-                      timeout=air_timeout)
+        ok2 = write_and_verify(reader, 'TID', TID_BANK, a.tid_start, tid_data,
+                              timeout=air_timeout, verify=not a.no_verify,
+                              attempts=tries)
 
         if a.match_epc:
             clear_epc_match(reader, air_timeout)
