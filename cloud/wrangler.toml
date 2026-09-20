@@ -1,0 +1,24 @@
+# Cloudflare Worker + D1 配置
+#
+# 首次部署：
+#     wrangler d1 create rfid-tags          # 把输出的 database_id 填到下面
+#     wrangler d1 execute rfid-tags --remote --file=cloud/schema.sql
+#     wrangler secret put API_KEY           # 客户端要带的密钥，自己起一个长随机串
+#     wrangler deploy
+#
+# 本地调试：
+#     wrangler d1 execute rfid-tags --local --file=cloud/schema.sql
+#     wrangler dev
+
+name = "rfid-tags"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rfid-tags"
+# 建库后把 wrangler d1 create 输出的 id 填到这里（也可以直接用环境变量覆盖）
+database_id = "32e9b21d-6287-4166-bc23-cb5398d6710b"
+
+[observability]
+enabled = true

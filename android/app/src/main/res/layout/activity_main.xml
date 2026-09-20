@@ -145,6 +145,14 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/checkText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
             android:id="@+id/tidText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -152,6 +160,30 @@
             android:text="—"
             android:textIsSelectable="true"
             android:textSize="16sp" />
+
+        <!-- 云端：上传当前这颗 / 打开列表 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/uploadBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="@string/cloud_upload" />
+
+            <Button
+                android:id="@+id/cloudBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="@string/cloud_open" />
+        </LinearLayout>
 
         <!-- 写 -->
         <TextView

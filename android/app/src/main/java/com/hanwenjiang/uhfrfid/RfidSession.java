@@ -28,6 +28,12 @@ public final class RfidSession {
     public String lastTid = "—";
     public String lastStatus = "";
 
+    /** 上一次读取的完整性校验结果。 */
+    public TagValidator.Result verdict;
+
+    /** 不合格但已确认两次读数一致时置位，允许破例上传。 */
+    public boolean forceAnomaly;
+
     /** USB 被拔掉时由 Activity 回调，用来通知界面。 */
     public interface DisconnectListener {
         void onTransportLost(String reason);

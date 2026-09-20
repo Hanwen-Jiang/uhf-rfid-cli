@@ -16,3 +16,9 @@ re/symbols.txt
 .idea/
 .DS_Store
 Thumbs.db
+
+# Cloudflare wrangler ±¾µØ×´Ì¬
+cloud/.wrangler/
+cloud/node_modules/
+cloud/.dev.vars
+

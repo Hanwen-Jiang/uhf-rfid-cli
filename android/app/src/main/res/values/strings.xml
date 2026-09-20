@@ -17,6 +17,50 @@
     <string name="write_section">写入（对应原 GUI 6C 读写标签页：访问密码 00000000，EPC 起始字 2，TID 起始字 0）</string>
     <string name="epc_hint">EPC（Hex，12 字节）</string>
     <string name="tid_hint">TID（Hex，12 字节）</string>
-    <string name="write_note">写 TID 需要标签支持：多数 Gen2 标签的 TID 是只读的，写了不会有变化（读写器会接受命令）。要写可改的存储区，用 USER 区（bank 3）。</string>
+    <string name="write_note">TID 能不能写取决于标签：标准 Gen2 是出厂只读的，但这批标签实测可写。程序写完一律回读校验，写不进去会如实报告。</string>
     <string name="raw_log">原始报文</string>
+
+    <!-- 完整性校验 -->
+    <string name="check_ok">完整性 ✓  第 9 位 EPC=0 / TID=2，其余一致</string>
+    <string name="check_bad">完整性 ✗  %s</string>
+    <string name="check_retry">不合格，再读一次确认…</string>
+    <string name="check_pass">合格</string>
+    <string name="check_fail">不合格</string>
+
+    <!-- 云端 -->
+    <string name="cloud">云端标签库</string>
+    <string name="cloud_title">云端标签库</string>
+    <string name="cloud_open">打开云端标签库</string>
+    <string name="cloud_upload">上传到云端</string>
+    <string name="cloud_refresh">刷新</string>
+    <string name="cloud_settings">设置</string>
+    <string name="cloud_only_unnamed">只看没命名的</string>
+    <string name="cloud_list_hint">点一行可以命名 / 删除；点右边的「写入」把这颗标签写进去。</string>
+    <string name="cloud_loading">正在读取云端列表…</string>
+    <string name="cloud_count">共 %1$d 条，其中 %2$d 条未命名</string>
+    <string name="cloud_error">云端出错：%s</string>
+    <string name="cloud_need_key">还没有设置云端 API key，请先填写。</string>
+    <string name="cloud_connect_first">先在主页连上读写器，再一键写入</string>
+    <string name="cloud_write_title">写入这颗标签？</string>
+    <string name="cloud_write">写入</string>
+    <string name="cloud_write_confirm">%1$s\n\nEPC: %2$s\n\n（同时写入它的 TID）</string>
+    <string name="cloud_write_done">写入完成</string>
+    <string name="cloud_writing">正在写入…</string>
+    <string name="cloud_unnamed">（未命名）</string>
+    <string name="cloud_anomaly">异常</string>
+    <string name="cloud_suffix">后 5 位 %s</string>
+    <string name="cloud_row_hint">后 5 位 %1$s　状态 %2$s</string>
+    <string name="cloud_name_hint">给它起个名字</string>
+    <string name="cloud_save">保存</string>
+    <string name="cloud_delete">删除</string>
+    <string name="cloud_base_hint">Worker 地址</string>
+    <string name="cloud_key_hint">API key</string>
+    <string name="cloud_operator_hint">使用者（谁在用这台手机）</string>
+    <string name="cloud_setup_tip">API key 由部署 Worker 的人提供。使用者名字会跟着每条记录上传，几个人共用时用来区分是谁传的。</string>
+    <string name="cloud_upload_ok">已上传：%s</string>
+    <string name="cloud_upload_anomaly">破例上传（已记为异常）：%s</string>
+    <string name="cloud_uploaded">已上传，要现在命名吗？</string>
+    <string name="cloud_read_first">先读一次标签再上传</string>
+    <string name="cloud_bad_twice">连续两次读数相同但不合格 —— 已按异常破例上传并记录</string>
+    <string name="cloud_bad_once">不合格：%s\n\n再读一次，若两次读数相同就破例上传并记为异常。</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.hanwenjiang.uhfrfid;
 
+import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -16,6 +17,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -44,7 +46,8 @@ public class MainActivity extends AppCompatActivity {
     private RfidSession session;
     private UsbManager usbManager;
 
-    private TextView statusText, epcText, tidText, logText;
+    private TextView statusText, epcText, tidText, logText, checkText;
+    private Button uploadBtn, cloudBtn;
     private Button connectBtn, readBtn, writeBtn;
     private EditText antennaEdit, powerEdit, epcEdit, tidEdit;
     private CheckBox restartCheck, muteCheck;
@@ -88,6 +91,9 @@ public class MainActivity extends AppCompatActivity {
         epcText = findViewById(R.id.epcText);
         tidText = findViewById(R.id.tidText);
         logText = findViewById(R.id.logText);
+        checkText = findViewById(R.id.checkText);
+        uploadBtn = findViewById(R.id.uploadBtn);
+        cloudBtn = findViewById(R.id.cloudBtn);
         logText.setMovementMethod(new ScrollingMovementMethod());
 
         connectBtn = findViewById(R.id.connectBtn);
@@ -105,6 +111,8 @@ public class MainActivity extends AppCompatActivity {
         connectBtn.setOnClickListener(v -> connectOrDisconnect());
         readBtn.setOnClickListener(v -> readOnce());
         writeBtn.setOnClickListener(v -> writeOnce());
+        uploadBtn.setOnClickListener(v -> uploadCurrent());
+        cloudBtn.setOnClickListener(v -> CloudActivity.open(this));
         findViewById(R.id.scanUsbBtn).setOnClickListener(
                 v -> setStatus(usbDiagnostics()));
         // 长按 = 芯片寄存器探针（排查 CH34x 初始化失败用）
@@ -357,6 +365,15 @@ public class MainActivity extends AppCompatActivity {
     // ------------------------------------------------------------ 读
 
     private void readOnce() {
+        readOnce(false);
+    }
+
+    /**
+     * 读一次标签，并做完整性校验。
+     *
+     * @param forUpload 这次读是为了上传（会决定是否自动重读一次来确认）
+     */
+    private void readOnce(boolean forUpload) {
         setStatus("查询中…");
         worker.execute(() -> {
             try {
@@ -364,23 +381,62 @@ public class MainActivity extends AppCompatActivity {
                 RfidFrame.TagId id = session.reader.readEpcTid();
                 long dt = System.currentTimeMillis() - t0;
                 String raw = session.transport.takeLog();
-                if (id.ok()) {
-                    session.lastEpc = id.epc;
-                    session.lastTid = id.tid == null ? "(应答里没有)" : id.tid;
-                    session.lastStatus = "读到标签（" + dt + " ms）";
-                } else {
+                if (!id.ok()) {
                     session.lastEpc = "—";
                     session.lastTid = "—";
+                    session.verdict = null;
                     session.lastStatus = "没读到标签。\n把标签贴近天线，"
                             + "或换天线口/功率再试（蜂鸣器每读到一次会响一声）。";
+                    ui.post(() -> {
+                        epcText.setText(session.lastEpc);
+                        tidText.setText(session.lastTid);
+                        checkText.setText("");
+                        setStatus(session.lastStatus);
+                        appendLog(raw);
+                    });
+                    return;
                 }
-                final String s = session.lastStatus;
+
+                TagValidator.Result v = TagValidator.check(id.epc, id.tid);
+                session.lastEpc = id.epc;
+                session.lastTid = id.tid == null ? "(应答里没有)" : id.tid;
+                session.verdict = v;
+                session.lastStatus = "读到标签（" + dt + " ms）";
+
                 ui.post(() -> {
                     epcText.setText(session.lastEpc);
                     tidText.setText(session.lastTid);
-                    setStatus(s);
+                    checkText.setText(v.complete
+                            ? getString(R.string.check_ok)
+                            : getString(R.string.check_bad, v.detail == null ? v.reason : v.detail));
+                    checkText.setTextColor(v.complete ? 0xFF1B5E20 : 0xFFB71C1C);
+                    setStatus(session.lastStatus);
                     appendLog(raw);
+                    updateCloudButtons();
                 });
+
+                if (forUpload && !v.complete) {
+                    // 不合格：再读一次，两次读数相同才允许破例上传
+                    ui.post(() -> setStatus(getString(R.string.check_retry)));
+                    Thread.sleep(250);
+                    RfidFrame.TagId again = session.reader.readEpcTid();
+                    if (again.ok()) {
+                        boolean same = id.epc.equalsIgnoreCase(again.epc)
+                                && id.tid != null && id.tid.equalsIgnoreCase(again.tid);
+                        if (same) {
+                            session.lastStatus = getString(R.string.cloud_bad_twice);
+                            session.forceAnomaly = true;
+                            ui.post(() -> {
+                                setStatus(session.lastStatus);
+                                doUpload();
+                            });
+                            return;
+                        }
+                    }
+                    session.forceAnomaly = false;
+                    ui.post(() -> setStatus(getString(R.string.cloud_bad_once,
+                            v.detail == null ? v.reason : v.detail)));
+                }
             } catch (Exception e) {
                 String why = e.getMessage() == null ? e.toString() : e.getMessage();
                 session.lastStatus = "查询失败：" + why;
@@ -390,6 +446,84 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    // ------------------------------------------------------------ 云端
+
+    /** 上传当前读到的标签。不合格的会先重读确认，两次一致就按异常破例上传。 */
+    private void uploadCurrent() {
+        if (session.lastEpc == null || session.lastEpc.startsWith("—")) {
+            setStatus(getString(R.string.cloud_read_first));
+            return;
+        }
+        if (session.verdict != null && !session.verdict.complete && !session.forceAnomaly) {
+            readOnce(true);          // 不合格 -> 重读确认后再上传
+            return;
+        }
+        doUpload();
+    }
+
+    private void doUpload() {
+        final String epc = session.lastEpc;
+        final String tid = session.lastTid;
+        final String note = session.forceAnomaly
+                ? "连续两次读数相同但第 9 位不符（EPC 应为 0 / TID 应为 2）"
+                : null;
+        session.forceAnomaly = false;
+        setStatus("正在上传…");
+        worker.execute(() -> {
+            try {
+                CloudClient.UploadResult r = Prefs.client(this).upload(epc, tid, note);
+                String shown = r.tag == null ? epc : r.tag.epc;
+                ui.post(() -> {
+                    setStatus(note == null
+                            ? getString(R.string.cloud_upload_ok, shown)
+                            : getString(R.string.cloud_upload_anomaly, shown));
+                    askName(r.tag);
+                    updateCloudButtons();
+                });
+            } catch (Exception e) {
+                String why = e.getMessage() == null ? e.toString() : e.getMessage();
+                ui.post(() -> setStatus(getString(R.string.cloud_error, why)));
+            }
+        });
+    }
+
+    /** 上传完立刻问要不要命名。 */
+    private void askName(CloudClient.Tag tag) {
+        if (tag == null) return;
+        final EditText input = new EditText(this);
+        input.setHint(R.string.cloud_name_hint);
+        input.setSingleLine(true);
+        LinearLayout box = new LinearLayout(this);
+        box.setPadding(48, 16, 48, 0);
+        box.addView(input);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.cloud_uploaded)
+                .setMessage(tag.epc + "\n" + getString(R.string.cloud_suffix, tag.suffix))
+                .setView(box)
+                .setPositiveButton(R.string.cloud_save, (d, w) -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty()) return;
+                    worker.execute(() -> {
+                        try {
+                            Prefs.client(this).rename(tag.id, name);
+                            ui.post(() -> setStatus(getString(R.string.cloud_upload_ok, tag.epc)
+                                    + "  → " + name));
+                        } catch (Exception e) {
+                            String why = e.getMessage() == null ? e.toString() : e.getMessage();
+                            ui.post(() -> setStatus(getString(R.string.cloud_error, why)));
+                        }
+                    });
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void updateCloudButtons() {
+        boolean has = session.lastEpc != null && !session.lastEpc.startsWith("—");
+        uploadBtn.setEnabled(has);
     }
 
     // ------------------------------------------------------------ 写
