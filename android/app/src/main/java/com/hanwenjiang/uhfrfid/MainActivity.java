@@ -456,6 +456,13 @@ public class MainActivity extends AppCompatActivity {
             setStatus(getString(R.string.cloud_read_first));
             return;
         }
+        // 没配 key 就直接跳到云端界面 —— 那边会自动弹出设置窗。
+        // （主页本身没有设置入口，只提示"点设置"会让人找不到。）
+        if (!Prefs.isConfigured(this)) {
+            setStatus(getString(R.string.cloud_need_key));
+            CloudActivity.open(this);
+            return;
+        }
         if (session.verdict != null && !session.verdict.complete && !session.forceAnomaly) {
             readOnce(true);          // 不合格 -> 重读确认后再上传
             return;

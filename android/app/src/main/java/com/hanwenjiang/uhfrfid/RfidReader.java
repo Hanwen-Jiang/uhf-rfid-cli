@@ -168,41 +168,96 @@ public class RfidReader {
         return null;
     }
 
-    /** 单次写入的最大尝试次数。0x41 是偶发的，重写几次通常就过了。 */
+    /**
+     * 重写轮数：写一次 + 回读校验为一轮，不成功就整轮重来。
+     *
+     * <p><b>只在这里重试，{@link #writeBank} 本身不重试。</b>
+     * 之前两层都写了重试（8 轮 × 8 次 = 最坏 64 次写入，每次 4 秒超时），
+     * 一次失败的写入能拖好几分钟。重试只该有一层。
+     */
     public static final int WRITE_ATTEMPTS = 8;
 
+    /** 单次写入的结果。 */
+    public static final class WriteOnce {
+        public boolean ok;
+        public boolean replied;    // 有没有收到应答（false = 超时，通常意味着场上没标签）
+        public int code = -1;      // 状态码：长应答取第 3 字节，短应答就是它本身
+    }
+
     /**
-     * 写某个 bank，**失败就一直重写直到成功**（最多 {@link #WRITE_ATTEMPTS} 次）。
+     * 写某个 bank，**只写一次**。
      *
-     * <p>实测 0x41 这种失败是偶发的 —— 同一帧重发一次往往就成功了，所以这里不
-     * 一次不成就放弃。每次尝试都会打印状态码，方便看出是不是真的写不进去。
-     *
-     * @return 是否成功。成功时读应答形如 {@code 00 <字数2> 10 <PC> <数据> <CRC> 10 01}，
-     *         状态码在偏移 2；失败时只有一个字节，就是状态码本身（例如 0x41）。
+     * <p>成功时读应答形如 {@code 00 <字数2> 10 <PC> <数据> <CRC> 10 01}，状态码在偏移 2；
+     * 失败时只有一个字节，就是错误码本身（例如 0x41）。
      */
-    public boolean writeBank(int bank, int wordAddr, byte[] data) throws IOException {
-        int lastCode = -1;
-        for (int attempt = 1; attempt <= WRITE_ATTEMPTS; attempt++) {
-            List<RfidFrame.Frame> fs = io.transact(RfidFrame.build(RfidFrame.CMD_WRITE,
-                    RfidFrame.payloadWrite(bank, wordAddr, data, 0)), 4000);
-            boolean got = false;
-            for (RfidFrame.Frame f : fs) {
-                if (f.ok && f.cmd == RfidFrame.CMD_WRITE) {
-                    got = true;
-                    // 长应答（>=3 字节）的状态码在第 3 字节；短应答就是错误码本身
-                    lastCode = f.payload.length >= 3
-                            ? (f.payload[2] & 0xFF) : (f.payload.length == 1
-                            ? (f.payload[0] & 0xFF) : -1);
-                    boolean ok = lastCode == 0x10;
-                    say("  写应答: " + RfidFrame.hexSpaced(f.payload)
-                            + (ok ? "   (接受)" : String.format("   (失败 0x%02X)", lastCode))
-                            + (attempt > 1 ? "   第 " + attempt + " 次" : ""));
-                    if (ok) return true;
-                    break;
-                }
+    public WriteOnce writeBankOnce(int bank, int wordAddr, byte[] data) throws IOException {
+        WriteOnce r = new WriteOnce();
+        List<RfidFrame.Frame> fs = io.transact(RfidFrame.build(RfidFrame.CMD_WRITE,
+                RfidFrame.payloadWrite(bank, wordAddr, data, 0)), 4000);
+        for (RfidFrame.Frame f : fs) {
+            if (f.ok && f.cmd == RfidFrame.CMD_WRITE) {
+                r.replied = true;
+                r.code = f.payload.length >= 3
+                        ? (f.payload[2] & 0xFF)
+                        : (f.payload.length == 1 ? (f.payload[0] & 0xFF) : -1);
+                r.ok = r.code == 0x10;
+                say("  写应答: " + RfidFrame.hexSpaced(f.payload)
+                        + (r.ok ? "   (接受)" : String.format("   (失败 0x%02X)", r.code)));
+                return r;
             }
-            if (!got) say("  第 " + attempt + " 次没有应答，重写…");
-            if (attempt < WRITE_ATTEMPTS) {
+        }
+        say("  写命令没有应答（超时）");
+        return r;
+    }
+
+    /** 写入一个 bank 的结果。 */
+    public static final class WriteResult {
+        public boolean ok;
+        public int attempts;         // 实际跑了几轮
+        public int lastCode = -1;    // 最后一轮的状态码，方便看出到底为什么失败
+        public boolean replied;      // 最后一轮有没有收到应答
+        public String readBack;      // 回读到的值（大写 hex），读不到为 null
+        public String error;         // 失败原因，成功时为 null
+    }
+
+    /**
+     * 写入 + 回读校验，不成功就整轮重来（最多 {@link #WRITE_ATTEMPTS} 轮）。
+     *
+     * <p>语义：**写不成就再写一遍，直到回读一致为止**。
+     * 只看写入应答还不够 —— 有时应答说成功但内容没落地，所以以回读为准。
+     *
+     * <p>重试**只有这一层**：{@link #writeBankOnce} 每次只写一次。两层都重试的话
+     * 最坏会变成 8×8=64 次写入，一次失败要拖好几分钟。
+     *
+     * <p>校验方式是在读应答里**查找**写入的数据，而不是按固定偏移切：读应答是一条
+     * 合并记录 {@code 00 01 <len> <PC2> <EPC12> <CRC2> <TID12>}，EPC 在偏移 5、
+     * TID 在偏移 19。按偏移 5 取 TID 会取到 EPC，于是永远"不一致"。
+     */
+    public WriteResult writeBankVerified(int bank, int wordAddr, byte[] data, String label)
+            throws IOException {
+        WriteResult res = new WriteResult();
+        String want = RfidFrame.hex(data);
+        for (int round = 1; round <= WRITE_ATTEMPTS; round++) {
+            res.attempts = round;
+            if (round > 1) say("  第 " + round + "/" + WRITE_ATTEMPTS + " 轮重写 " + label + "…");
+            WriteOnce w = writeBankOnce(bank, wordAddr, data);
+            res.lastCode = w.code;
+            res.replied = w.replied;
+
+            byte[] back = readBank(bank, wordAddr, data.length / 2);
+            res.readBack = back == null ? null : extract(back, data, bank);
+            if (back != null && contains(back, data)) {
+                res.ok = true;
+                return res;
+            }
+            // 一直没应答 = 场上没标签，重写也变不出来，两轮就收手
+            if (!w.replied && round >= 2) {
+                res.error = String.format(
+                        "连续 %d 轮没有任何应答 —— 多半是场上没有标签（回读=%s）",
+                        round, res.readBack == null ? "读不到" : res.readBack);
+                return res;
+            }
+            if (round < WRITE_ATTEMPTS) {
                 try {
                     Thread.sleep(200);
                 } catch (InterruptedException ignored) {
@@ -211,56 +266,9 @@ public class RfidReader {
                 }
             }
         }
-        say(String.format("  重写了 %d 次仍未成功，最后状态码 0x%02X",
-                WRITE_ATTEMPTS, lastCode));
-        return false;
-    }
-
-    /** 写入一个 bank 的结果。 */
-    public static final class WriteResult {
-        public boolean ok;
-        public int attempts;
-        public String readBack;      // 回读到的值（大写 hex），读不到为 null
-        public String error;         // 失败原因，成功时为 null
-    }
-
-    /**
-     * 写入 + 回读校验，不成功就整轮重来（最多 {@link #WRITE_ATTEMPTS} 轮）。
-     *
-     * <p>这是用户要的语义：**0x41 就再写一遍，一直写到成功为止**。
-     * 只看写入应答还不够 —— 有时候应答是成功的但内容没落地，所以以回读为准。
-     *
-     * <p><b>校验方式：在读应答里查找写入的数据，而不是按固定偏移切。</b>
-     * 读写器的读应答是一条<b>合并记录</b>：
-     * <pre>
-     *   00 01 &lt;len&gt; &lt;PC 2字节&gt; &lt;EPC 12字节&gt; &lt;CRC 2字节&gt; &lt;TID 12字节&gt; …
-     * </pre>
-     * 所以 EPC 在偏移 5、TID 在偏移 19。以前一律按偏移 5 取，读 TID 时取到的
-     * 其实是 EPC，于是永远「不一致」，白白重写 8 轮也写不进去。
-     */
-    public WriteResult writeBankVerified(int bank, int wordAddr, byte[] data, String label)
-            throws IOException {
-        WriteResult res = new WriteResult();
-        String want = RfidFrame.hex(data);
-        for (int round = 1; round <= WRITE_ATTEMPTS; round++) {
-            res.attempts = round;
-            if (round > 1) say("  第 " + round + " 轮重写 " + label + "…");
-            writeBank(bank, wordAddr, data);
-            byte[] back = readBank(bank, wordAddr, data.length / 2);
-            res.readBack = back == null ? null : extract(back, data, bank);
-            if (back != null && contains(back, data)) {
-                res.ok = true;
-                return res;
-            }
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        res.error = String.format("重写 %d 轮后回读仍是 %s，未变成 %s",
-                res.attempts, res.readBack == null ? "(读不到)" : res.readBack, want);
+        res.error = String.format("重写 %d 轮后回读仍是 %s，未变成 %s（最后状态码 0x%02X）",
+                res.attempts, res.readBack == null ? "(读不到)" : res.readBack, want,
+                res.lastCode < 0 ? 0 : res.lastCode);
         return res;
     }
 
@@ -320,6 +328,17 @@ public class RfidReader {
                 .append('\n');
         if (!w1.ok) {
             r.append("  ⚠ ").append(w1.error).append('\n');
+            // **EPC 没写进去就不要接着写 TID。**
+            // 这类标签的 EPC/TID 是配对的（只差第 9 位），只把 TID 改掉会让它
+            // 变成不配对，之后每次读数都会被判「不合格」。宁可什么都不改。
+            //
+            // 注意：EPC 写失败**不代表 EPC 被锁**。实测这颗标签失败几次后
+            // 重试就能写进去（写入本身是偶发的），所以这里是在重试全部用尽之后
+            // 才走到，属于"确实写不进去"的情况。
+            r.append("  → 已跳过 TID 写入：EPC 没改成的话，只写 TID 会让这颗标签的 "
+                    + "EPC/TID 不配对（第 9 位不再是 0/2），之后每次读都会被判不合格。\n");
+            r.append("     换一颗新标签，或先确认这颗标签的 EPC 区是不是被锁了。\n");
+            return r.toString();
         }
 
         // 4) EPC 变了，匹配得跟着更新 —— 否则后面写 TID 时读写器锁定的还是旧 EPC。

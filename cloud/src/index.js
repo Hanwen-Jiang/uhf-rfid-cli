@@ -178,8 +178,11 @@ export default {
 
         let row;
         if (existing) {
+          // operator 用 COALESCE：客户端没带就用原来记着的。
+          // 否则换个没填使用者的人重新上传一次，就把"谁传的"抹掉了。
           await env.DB.prepare(
-            `UPDATE tags SET tid = ?, status = ?, anomaly_note = ?, operator = ?,
+            `UPDATE tags SET tid = ?, status = ?, anomaly_note = ?,
+                             operator = COALESCE(?, operator),
                              reads = reads + 1, updated_at = datetime('now')
              WHERE epc = ?`
           ).bind(tid, status, note, operator, epc).run();
