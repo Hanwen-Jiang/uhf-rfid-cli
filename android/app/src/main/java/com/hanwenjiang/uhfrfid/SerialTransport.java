@@ -2,6 +2,7 @@ package com.hanwenjiang.uhfrfid;
 
 import android.hardware.usb.UsbDevice;
 import android.util.Log;
+import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
@@ -55,6 +56,9 @@ public class SerialTransport extends Transport {
         if (driver == null) {
             throw new IOException("还没有 USB 权限，请在弹窗里点「允许」。");
         }
+
+        warmUp(driver.getDevice());
+
         port = driver.getPorts().get(0);
         port.open(manager.openDevice(driver.getDevice()));
         port.setParameters(BAUD, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE);
@@ -62,6 +66,62 @@ public class SerialTransport extends Transport {
         port.setRTS(true);
         name = describe(driver.getDevice());
         log.setLength(0);
+    }
+
+    /**
+     * 让库去初始化之前，先自己给芯片发一次复位，再空读几次版本寄存器。
+     *
+     * <p>背景：库的 CH34x 初始化**第一步是读**寄存器 {@code 0x5F} 校验版本
+     * （要求第 2 字节 == {@code 0x00}），不满足就报
+     * {@code Expected 0x0 byte, but get 0x?? [init #1]}；
+     * 它要等到**下一步**才发 {@code 0xA1} 复位。
+     *
+     * <p>也就是说 <b>复位在校验之后</b>。芯片上电后、或上一轮会话结束时如果停在某个
+     * 状态，第一次读就会拿到 {@code 0xff} / {@code 0xec}，校验直接不过。所以这里把
+     * 顺序倒过来 —— 先补一发 {@code 0xA1} 复位，再读。
+     *
+     * <p>读到的内容记进日志，方便判断芯片到底回什么。失败不影响后续。
+     */
+    private void warmUp(UsbDevice dev) {
+        UsbDeviceConnection c = null;
+        try {
+            c = manager.openDevice(dev);
+            if (c == null) return;
+
+            // 0x40 = 主机到设备 | 厂商请求 | 设备接收者
+            int n = c.controlTransfer(0x40, 0xA1, 0, 0, null, 0, 500);
+            log.append("预热：0xA1 复位 -> ").append(n >= 0 ? "ok" : ("n=" + n)).append('\n');
+            try {
+                Thread.sleep(80);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 3; i++) {
+                byte[] buf = new byte[2];
+                int r = c.controlTransfer(0xC0, 0x5F, 0, 0, buf, buf.length, 500);
+                sb.append(String.format("#%d %s  ", i + 1,
+                        r > 0 ? RfidFrame.hexSpaced(RfidFrame.slice(buf, 0, r))
+                              : ("n=" + r)));
+                try {
+                    Thread.sleep(60);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            log.append("预热读 0x5F: ").append(sb).append('\n');
+        } catch (Exception e) {
+            log.append("预热失败（忽略）: ").append(e.getMessage()).append('\n');
+        } finally {
+            if (c != null) {
+                try {
+                    c.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     @Override

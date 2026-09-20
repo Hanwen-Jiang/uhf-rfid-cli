@@ -92,6 +92,24 @@ public final class Prefs {
         sp(c).edit().putBoolean("auto_upload", v).apply();
     }
 
+    /** 天线口（1-4）。默认 1。 */
+    public static int antenna(Context c) {
+        return sp(c).getInt("antenna", 1);
+    }
+
+    public static void setAntenna(Context c, int v) {
+        sp(c).edit().putInt("antenna", v).apply();
+    }
+
+    /** 天线功率（0-30）。默认 26。 */
+    public static int power(Context c) {
+        return sp(c).getInt("power", 26);
+    }
+
+    public static void setPower(Context c, int v) {
+        sp(c).edit().putInt("power", v).apply();
+    }
+
     /** 连接后是否先复位读写器。默认开（对齐原 GUI 的连接预处理）。 */
     public static boolean restartOnConnect(Context c) {
         return sp(c).getBoolean("restart_on_connect", true);

@@ -12,10 +12,13 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
 import android.text.method.ScrollingMovementMethod;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
+import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -53,7 +56,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout hitCard, resultCard;
     private TextView hitLabel, hitName, hitSub, resultTitle, resultText;
     private Button connectBtn, readBtn, writeBtn;
-    private EditText antennaEdit, powerEdit, epcEdit, tidEdit;
+    private EditText epcEdit, tidEdit;
 
     private final BroadcastReceiver permReceiver = new BroadcastReceiver() {
         @Override
@@ -110,8 +113,6 @@ public class MainActivity extends AppCompatActivity {
         readBtn = findViewById(R.id.readBtn);
         writeBtn = findViewById(R.id.writeBtn);
 
-        antennaEdit = findViewById(R.id.antennaEdit);
-        powerEdit = findViewById(R.id.powerEdit);
         epcEdit = findViewById(R.id.epcEdit);
         tidEdit = findViewById(R.id.tidEdit);
 
@@ -318,8 +319,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void doConnect() {
-        final int ant = parseInt(antennaEdit, 1);
-        final int pw = parseInt(powerEdit, 26);
+        final int ant = Prefs.antenna(this);
+        final int pw = Prefs.power(this);
         final boolean doReset = Prefs.restartOnConnect(this);
         // 蜂鸣器：默认静音（读写器每读到一次就响一声，很吵）。勾选框状态会记住。
         final boolean mute = Prefs.muteBeep(this);
@@ -331,9 +332,13 @@ public class MainActivity extends AppCompatActivity {
                 // 在中间传输层不稳时会偶发失败，报
                 //   Expected 0x0 byte, but get 0xec [init #1]
                 // （实测：模拟器的 USB 透传下 4 次里失败 2 次；真机上少见但也会有）
+
+                // CH34x 初始化（读 0x5F 校验版本）有时会返回 0xff/0xec 而失败，
+                // 重连几次通常能过。所以这里多试几次、退避递增。
                 Transport t = null;
                 IOException lastErr = null;
-                for (int attempt = 1; attempt <= 3 && t == null; attempt++) {
+                final int tries = 6;
+                for (int attempt = 1; attempt <= tries && t == null; attempt++) {
                     Transport cand = new SerialTransport(usbManager, granted);
                     try {
                         cand.open();
@@ -341,14 +346,30 @@ public class MainActivity extends AppCompatActivity {
                     } catch (IOException e) {
                         lastErr = e;
                         cand.close();
-                        if (attempt < 3) {
-                            appendLog("打开串口失败（第 " + attempt + " 次）："
+                        if (attempt < tries) {
+                            appendLog("打开串口失败（第 " + attempt + "/" + tries + " 次）："
                                     + e.getMessage() + "，重试…");
-                            Thread.sleep(400);
+                            Thread.sleep(250L * attempt);
                         }
                     }
                 }
-                if (t == null) throw lastErr;
+                if (t == null) {
+                    // 库的 CH34x 初始化被版本校验挡死（这颗芯片读 0x5F 回的字节不是 0x00），
+                    // 那就自己驱动 —— 同一套寄存器序列，跳过那次校验。
+                    // 自驱只要一个 UsbDevice，直接在已授权的里面拿。
+                    if (granted.isEmpty()) throw lastErr;
+                    UsbDevice rawDev = granted.iterator().next();
+                    appendLog("库的初始化失败，改用自驱 CH341 再试…");
+                    Ch341RawTransport raw = new Ch341RawTransport(usbManager, rawDev);
+                    try {
+                        raw.open();
+                        t = raw;
+                    } catch (Exception e2) {
+                        raw.close();
+                        appendLog("自驱也失败：" + e2.getMessage());
+                        throw lastErr;
+                    }
+                }
 
                 RfidReader reader = session.use(t);
 
@@ -613,6 +634,40 @@ public class MainActivity extends AppCompatActivity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(48, 8, 48, 0);
 
+        // 射频参数：原来占着主页一行、还是两个光秃秃的数字，现在挪进来。
+        // 注意 hint 只在输入框为空时显示，已经填了值就看不见了 —— 所以得配真正的标签。
+        LinearLayout rf = new LinearLayout(this);
+        rf.setOrientation(LinearLayout.HORIZONTAL);
+
+        LinearLayout colA = new LinearLayout(this);
+        colA.setOrientation(LinearLayout.VERTICAL);
+        TextView labelA = new TextView(this);
+        labelA.setText(R.string.antenna_label);
+        labelA.setTextSize(12);
+        colA.addView(labelA);
+        EditText ant = new EditText(this);
+        ant.setInputType(InputType.TYPE_CLASS_NUMBER);
+        ant.setText(String.valueOf(Prefs.antenna(this)));
+        colA.addView(ant);
+        rf.addView(colA, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        LinearLayout colP = new LinearLayout(this);
+        colP.setOrientation(LinearLayout.VERTICAL);
+        TextView labelP = new TextView(this);
+        labelP.setText(R.string.power_label);
+        labelP.setTextSize(12);
+        colP.addView(labelP);
+        EditText pw = new EditText(this);
+        pw.setInputType(InputType.TYPE_CLASS_NUMBER);
+        pw.setText(String.valueOf(Prefs.power(this)));
+        colP.addView(pw);
+        LinearLayout.LayoutParams lpp = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lpp.setMarginStart(24);
+        rf.addView(colP, lpp);
+        box.addView(rf);
+
         CheckBox restart = new CheckBox(this);
         restart.setText(R.string.restart);
         restart.setChecked(Prefs.restartOnConnect(this));
@@ -637,9 +692,13 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle(R.string.settings)
                 .setView(box)
                 .setPositiveButton(R.string.cloud_save, (d, w) -> {
+                    Prefs.setAntenna(this, parseInt(ant, 1));
+                    Prefs.setPower(this, parseInt(pw, 26));
                     Prefs.setRestartOnConnect(this, restart.isChecked());
                     Prefs.setMuteBeep(this, mute.isChecked());
                     Prefs.setAutoUpload(this, auto.isChecked());
+                    setStatus("设置已保存：天线 " + Prefs.antenna(this)
+                            + "  功率 " + Prefs.power(this));
                 })
                 .setNeutralButton(R.string.cloud_open, (d, w) -> CloudActivity.open(this))
                 .setNegativeButton(android.R.string.cancel, null)
