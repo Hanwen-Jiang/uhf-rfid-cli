@@ -56,7 +56,11 @@
     <string name="cloud_base_hint">Worker 地址</string>
     <string name="cloud_key_hint">API key</string>
     <string name="cloud_operator_hint">使用者（谁在用这台手机）</string>
-    <string name="cloud_setup_tip">API key 由部署 Worker 的人提供。使用者名字会跟着每条记录上传，几个人共用时用来区分是谁传的。</string>
+    <string name="cloud_operator_default">默认用手机名：%s</string>
+    <string name="cloud_auto_upload">读完标签自动上传</string>
+    <string name="cloud_reset">恢复默认</string>
+    <string name="cloud_setup_tip">地址和 key 已经内置好了，直接用即可。使用者默认取手机自己的名字，几个人共用时用来区分谁传的。清空某一项 = 回到内置默认值。</string>
+    <string name="cloud_auto_off_hint">自动上传已关闭 —— 读完要点「上传到云端」。</string>
     <string name="cloud_upload_ok">已上传：%s</string>
     <string name="cloud_upload_anomaly">破例上传（已记为异常）：%s</string>
     <string name="cloud_uploaded">已上传，要现在命名吗？</string>

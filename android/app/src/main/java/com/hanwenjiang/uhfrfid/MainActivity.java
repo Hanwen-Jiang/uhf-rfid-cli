@@ -436,6 +436,17 @@ public class MainActivity extends AppCompatActivity {
                     session.forceAnomaly = false;
                     ui.post(() -> setStatus(getString(R.string.cloud_bad_once,
                             v.detail == null ? v.reason : v.detail)));
+                    return;
+                }
+
+                // 读完自动上传：合格就直接传；不合格走上面的"重读确认"路径，
+                // 所以这里再调一次带 forUpload 的读（它内部会判断）。
+                if (!forUpload && Prefs.autoUpload(this)) {
+                    if (v.complete) {
+                        doUpload();
+                    } else if (Prefs.isConfigured(this)) {
+                        readOnce(true);
+                    }
                 }
             } catch (Exception e) {
                 String why = e.getMessage() == null ? e.toString() : e.getMessage();

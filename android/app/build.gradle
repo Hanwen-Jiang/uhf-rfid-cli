@@ -13,6 +13,16 @@ android {
         targetSdk 36
         versionCode 1
         versionName "1.0"
+
+        // 云端默认配置，编译进 APK。设置里改过的值优先，这里只是"没配过时用什么"。
+        // key 放在构建文件里而不是源码常量里，方便换 key 时只改一处。
+        buildConfigField "String", "DEFAULT_CLOUD_BASE",
+                '"https://rfid-tags.root-60a.workers.dev"'
+        buildConfigField "String", "DEFAULT_API_KEY", '"b26f814150f2d7ee25cdee03fd0995434d9754eef7e5bbf99386f46383123187"'
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {

@@ -186,6 +186,11 @@ public class CloudActivity extends AppCompatActivity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(48, 16, 48, 0);
 
+        CheckBox auto = new CheckBox(this);
+        auto.setText(R.string.cloud_auto_upload);
+        auto.setChecked(Prefs.autoUpload(this));
+        box.addView(auto);
+
         EditText base = new EditText(this);
         base.setHint(R.string.cloud_base_hint);
         base.setText(Prefs.base(this));
@@ -198,7 +203,9 @@ public class CloudActivity extends AppCompatActivity {
 
         EditText who = new EditText(this);
         who.setHint(R.string.cloud_operator_hint);
-        who.setText(Prefs.operator(this));
+        // 没自定义过就显示手机名（也就是实际会用的值），让人知道传上去的是什么
+        who.setText(Prefs.operatorIsCustom(this) ? Prefs.operator(this) : "");
+        who.setHint(getString(R.string.cloud_operator_default, Prefs.deviceName(this)));
         box.addView(who);
 
         TextView tip = new TextView(this);
@@ -210,9 +217,20 @@ public class CloudActivity extends AppCompatActivity {
                 .setTitle(R.string.cloud_settings)
                 .setView(box)
                 .setPositiveButton(R.string.cloud_save, (d, w) -> {
-                    Prefs.setBase(this, base.getText().toString());
-                    Prefs.setApiKey(this, key.getText().toString());
+                    Prefs.setAutoUpload(this, auto.isChecked());
+                    // 地址/key 清空 = 回到编译时的默认值，不是"没有"
+                    Prefs.setBase(this, base.getText().toString().trim()
+                            .equals(Prefs.base(this)) ? "" : base.getText().toString());
+                    Prefs.setApiKey(this, key.getText().toString().trim()
+                            .equals(Prefs.apiKey(this)) ? "" : key.getText().toString());
                     Prefs.setOperator(this, who.getText().toString());
+                    load();
+                })
+                .setNeutralButton(R.string.cloud_reset, (d, w) -> {
+                    Prefs.setBase(this, "");
+                    Prefs.setApiKey(this, "");
+                    Prefs.setOperator(this, "");
+                    Prefs.setAutoUpload(this, true);
                     load();
                 })
                 .setNegativeButton(android.R.string.cancel, null)
