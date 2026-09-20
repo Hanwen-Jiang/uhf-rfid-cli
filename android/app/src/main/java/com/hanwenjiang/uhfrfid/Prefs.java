@@ -92,6 +92,15 @@ public final class Prefs {
         sp(c).edit().putBoolean("auto_upload", v).apply();
     }
 
+    /** 连接后是否先复位读写器。默认开（对齐原 GUI 的连接预处理）。 */
+    public static boolean restartOnConnect(Context c) {
+        return sp(c).getBoolean("restart_on_connect", true);
+    }
+
+    public static void setRestartOnConnect(Context c, boolean v) {
+        sp(c).edit().putBoolean("restart_on_connect", v).apply();
+    }
+
     /**
      * 是否关掉读写器蜂鸣器。**默认开（= 静音）**。
      *

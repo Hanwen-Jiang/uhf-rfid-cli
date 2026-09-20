@@ -9,6 +9,10 @@
     <string name="scan_usb">扫描 USB 设备（排查插上没反应）</string>
     <string name="antenna">天线口</string>
     <string name="power">功率</string>
+    <string name="antenna_label">天线口（1-4）</string>
+    <string name="power_label">功率（0-30）</string>
+    <string name="settings">设置</string>
+    <string name="settings_tip">「连接后复位」对齐原 GUI 的连接预处理，一般保持开启。「关蜂鸣器」发 0x7A 00 —— 注意部分读写器的蜂鸣器是硬件驱动的，软件关不掉（本机就是这样）。「读完自动上传」关掉后就得手点上传。\n\n提示：长按顶部标题可以预览卡片动画，不会读写标签。</string>
     <string name="restart">连接后复位</string>
     <string name="mute">关蜂鸣器</string>
     <string name="not_connected">未连接。插上 OTG 线后点「连接」。</string>

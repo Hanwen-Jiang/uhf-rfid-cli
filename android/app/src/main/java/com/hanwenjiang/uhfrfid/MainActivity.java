@@ -13,6 +13,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.method.ScrollingMovementMethod;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -52,7 +54,6 @@ public class MainActivity extends AppCompatActivity {
     private TextView hitLabel, hitName, hitSub, resultTitle, resultText;
     private Button connectBtn, readBtn, writeBtn;
     private EditText antennaEdit, powerEdit, epcEdit, tidEdit;
-    private CheckBox restartCheck, muteCheck;
 
     private final BroadcastReceiver permReceiver = new BroadcastReceiver() {
         @Override
@@ -114,12 +115,8 @@ public class MainActivity extends AppCompatActivity {
         epcEdit = findViewById(R.id.epcEdit);
         tidEdit = findViewById(R.id.tidEdit);
 
-        restartCheck = findViewById(R.id.restartCheck);
-        muteCheck = findViewById(R.id.muteCheck);
-        // 勾选框反映持久化的设置：默认静音（读写器每读到一次就响一声，很吵）
-        muteCheck.setChecked(Prefs.muteBeep(this));
-        muteCheck.setOnCheckedChangeListener((v, checked) ->
-                Prefs.setMuteBeep(this, checked));
+        // 连接后复位 / 关蜂鸣器 都挪到设置页了，这里不用再绑定控件
+
 
         connectBtn.setOnClickListener(v -> connectOrDisconnect());
         readBtn.setOnClickListener(v -> readOnce());
@@ -323,7 +320,7 @@ public class MainActivity extends AppCompatActivity {
     private void doConnect() {
         final int ant = parseInt(antennaEdit, 1);
         final int pw = parseInt(powerEdit, 26);
-        final boolean doReset = restartCheck.isChecked();
+        final boolean doReset = Prefs.restartOnConnect(this);
         // 蜂鸣器：默认静音（读写器每读到一次就响一声，很吵）。勾选框状态会记住。
         final boolean mute = Prefs.muteBeep(this);
 
@@ -586,6 +583,67 @@ public class MainActivity extends AppCompatActivity {
     private void updateCloudButtons() {
         boolean has = session.lastEpc != null && !session.lastEpc.startsWith("—");
         uploadBtn.setEnabled(has);
+    }
+
+    // ------------------------------------------------------------ 设置
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_settings) {
+            showSettings();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * 读写器设置（右上角溢出菜单里进）。
+     *
+     * <p>「连接后复位」和「关蜂鸣器」原来占着主页一整行，但它们是一设就不动的开关，
+     * 没必要天天摆在眼前，挪到这里。顺带把「读完自动上传」也放进来，凑齐所有开关。
+     */
+    private void showSettings() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(48, 8, 48, 0);
+
+        CheckBox restart = new CheckBox(this);
+        restart.setText(R.string.restart);
+        restart.setChecked(Prefs.restartOnConnect(this));
+        box.addView(restart);
+
+        CheckBox mute = new CheckBox(this);
+        mute.setText(R.string.mute);
+        mute.setChecked(Prefs.muteBeep(this));
+        box.addView(mute);
+
+        CheckBox auto = new CheckBox(this);
+        auto.setText(R.string.cloud_auto_upload);
+        auto.setChecked(Prefs.autoUpload(this));
+        box.addView(auto);
+
+        TextView tip = new TextView(this);
+        tip.setText(R.string.settings_tip);
+        tip.setTextSize(12);
+        box.addView(tip);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.settings)
+                .setView(box)
+                .setPositiveButton(R.string.cloud_save, (d, w) -> {
+                    Prefs.setRestartOnConnect(this, restart.isChecked());
+                    Prefs.setMuteBeep(this, mute.isChecked());
+                    Prefs.setAutoUpload(this, auto.isChecked());
+                })
+                .setNeutralButton(R.string.cloud_open, (d, w) -> CloudActivity.open(this))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     /** 云端给的是 UTC 的 {@code YYYY-MM-DD HH:MM:SS}，显示到分钟就够。 */
