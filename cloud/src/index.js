@@ -97,7 +97,11 @@ function rowToTag(row) {
     status: row.status,
     anomalyNote: row.anomaly_note,
     operator: row.operator,
-    reads: row.reads,
+    reads: row.reads,                    // 历史上传次数（老字段，保留兼容）
+    seenCount: row.seen_count,           // 读到过几次
+    lastSeen: row.last_seen,             // 最后一次读到
+    writeCount: row.write_count,         // 写成功几次
+    lastWritten: row.last_written,       // 最后一次写成功
     suffix: commonSuffix(row.epc, row.tid, 5),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -143,8 +147,26 @@ export default {
         return json({ epc, tid, suffix: commonSuffix(epc, tid, 5), ...v });
       }
 
-      // ---------------------------------------------------------- 列表
+      // ---------------------------------------------------------- 列表 / 按 EPC 查
       if (path === '/api/tags' && request.method === 'GET') {
+        // ?epc=xxx —— 查这一颗在不在库里。App 读完之后先查一下，
+        // 已经在库里就不再重复上传，只提示命中了哪一条。
+        // 带 &touch=1 表示"这次确实读到了"，顺手把读到次数 +1 并记时间。
+        const epcFilter = normHex(url.searchParams.get('epc'));
+        if (epcFilter) {
+          const touch = url.searchParams.get('touch') === '1';
+          if (touch) {
+            await env.DB.prepare(
+              `UPDATE tags SET seen_count = seen_count + 1,
+                               last_seen = datetime('now')
+               WHERE epc = ?`
+            ).bind(epcFilter).run();
+          }
+          const row = await env.DB
+            .prepare('SELECT * FROM tags WHERE epc = ?').bind(epcFilter).first();
+          return json({ count: row ? 1 : 0, tags: row ? [rowToTag(row)] : [] });
+        }
+
         const unnamed = url.searchParams.get('unnamed') === '1';
         const limit = Math.min(parseInt(url.searchParams.get('limit') || '500', 10) || 500, 2000);
         const sql = unnamed
@@ -152,6 +174,22 @@ export default {
           : 'SELECT * FROM tags ORDER BY (name IS NULL) DESC, created_at DESC LIMIT ?';
         const { results } = await env.DB.prepare(sql).bind(limit).all();
         return json({ count: results.length, tags: results.map(rowToTag) });
+      }
+
+      // ---------------------------------------------------------- 报告"写成功了一次"
+      if (path === '/api/tags/written' && request.method === 'POST') {
+        const body = await request.json().catch(() => null);
+        const epc = body ? normHex(body.epc) : null;
+        if (!epc) return json({ error: 'bad_epc' }, 400);
+        // 只有 App 确认两个区都写成功才会调这里，所以不用再判一次
+        const res = await env.DB.prepare(
+          `UPDATE tags SET write_count = write_count + 1,
+                           last_written = datetime('now')
+           WHERE epc = ?`
+        ).bind(epc).run();
+        if (!res.meta.changes) return json({ error: 'not_found', epc }, 404);
+        const row = await env.DB.prepare('SELECT * FROM tags WHERE epc = ?').bind(epc).first();
+        return json({ tag: rowToTag(row) });
       }
 
       // ---------------------------------------------------------- 上传

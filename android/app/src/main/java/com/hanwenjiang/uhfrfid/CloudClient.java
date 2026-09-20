@@ -47,7 +47,11 @@ public class CloudClient {
         public String status;
         public String anomalyNote;
         public String operator;
-        public int reads;
+        public int reads;            // 历史上传次数（老字段）
+        public int seenCount;        // 读到过几次
+        public String lastSeen;      // 最后一次读到
+        public int writeCount;       // 写成功几次
+        public String lastWritten;   // 最后一次写成功
         public String suffix;
         public String createdAt;
     }
@@ -123,6 +127,10 @@ public class CloudClient {
         t.anomalyNote = o.isNull("anomalyNote") ? null : o.optString("anomalyNote", null);
         t.operator = o.isNull("operator") ? null : o.optString("operator", null);
         t.reads = o.optInt("reads", 1);
+        t.seenCount = o.optInt("seenCount", 0);
+        t.lastSeen = o.isNull("lastSeen") ? null : o.optString("lastSeen", null);
+        t.writeCount = o.optInt("writeCount", 0);
+        t.lastWritten = o.isNull("lastWritten") ? null : o.optString("lastWritten", null);
         t.suffix = o.optString("suffix", "");
         t.createdAt = o.optString("createdAt", "");
         return t;
@@ -151,6 +159,44 @@ public class CloudClient {
             for (int i = 0; i < arr.length(); i++) out.add(toTag(arr.optJSONObject(i)));
         }
         return out;
+    }
+
+    /**
+     * 按 EPC 查这一颗在不在库里。命中返回那条记录，没有就返回 null。
+     *
+     * <p>App 读完之后先查一下：已经在库里就不重复上传，只提示命中了哪一条。
+     *
+     * @param touch true = 这次确实读到了，顺手把「读到次数」+1 并记下时间
+     */
+    public Tag findByEpc(String epc, boolean touch) throws IOException {
+        if (epc == null || epc.isEmpty()) return null;
+        JSONObject o = request("GET",
+                "/api/tags?epc=" + enc(epc) + (touch ? "&touch=1" : ""), null);
+        JSONArray arr = o.optJSONArray("tags");
+        if (arr == null || arr.length() == 0) return null;
+        return toTag(arr.optJSONObject(0));
+    }
+
+    public Tag findByEpc(String epc) throws IOException {
+        return findByEpc(epc, false);
+    }
+
+    /**
+     * 报告「写成功了一次」。
+     *
+     * <p><b>只有 EPC 和 TID 两个区都写成功才该调这个</b> —— 写失败、或者只写进去
+     * 一个区，都不算一次成功的写入，不能在云端记数。
+     */
+    public Tag markWritten(String epc) throws IOException {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("epc", epc);
+        } catch (org.json.JSONException e) {
+            throw new IOException(e.getMessage());
+        }
+        JSONObject o = request("POST", "/api/tags/written", body);
+        JSONObject tag = o.optJSONObject("tag");
+        return tag == null ? null : toTag(tag);
     }
 
     /**

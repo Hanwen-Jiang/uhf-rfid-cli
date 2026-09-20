@@ -116,11 +116,22 @@ public class CloudActivity extends AppCompatActivity {
                         try {
                             byte[] epc = RfidFrame.unhex(t.epc);
                             byte[] tid = t.tid == null ? new byte[0] : RfidFrame.unhex(t.tid);
-                            String report = s.reader.writeEpcAndTid(epc, 2, tid, 0);
+                            RfidReader.WriteReport rep = s.reader.writeEpcAndTid(epc, 2, tid, 0);
+                            // 两个区都写成功才算一次，向云端记数
+                            if (rep.ok) {
+                                try {
+                                    Prefs.client(this).markWritten(t.epc);
+                                } catch (Exception ignored) {
+                                    // 计数而已，失败不影响写入结果
+                                }
+                            }
                             ui.post(() -> {
-                                status.setText(report);
-                                Toast.makeText(this, R.string.cloud_write_done,
+                                status.setText(rep.text);
+                                Toast.makeText(this,
+                                        rep.ok ? R.string.cloud_write_done
+                                               : R.string.cloud_write_failed,
                                         Toast.LENGTH_SHORT).show();
+                                if (rep.ok) load();      // 刷新列表，让"写过几次"更新
                             });
                         } catch (Exception e) {
                             ui.post(() -> status.setText(getString(R.string.cloud_error, msg(e))));

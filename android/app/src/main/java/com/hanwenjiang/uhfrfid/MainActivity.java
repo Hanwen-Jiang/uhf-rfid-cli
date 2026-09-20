@@ -48,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView statusText, epcText, tidText, logText, checkText;
     private Button uploadBtn, cloudBtn;
+    private LinearLayout hitCard, resultCard;
+    private TextView hitLabel, hitName, hitSub, resultTitle, resultText;
     private Button connectBtn, readBtn, writeBtn;
     private EditText antennaEdit, powerEdit, epcEdit, tidEdit;
     private CheckBox restartCheck, muteCheck;
@@ -94,6 +96,13 @@ public class MainActivity extends AppCompatActivity {
         checkText = findViewById(R.id.checkText);
         uploadBtn = findViewById(R.id.uploadBtn);
         cloudBtn = findViewById(R.id.cloudBtn);
+        hitCard = findViewById(R.id.hitCard);
+        resultCard = findViewById(R.id.resultCard);
+        hitLabel = findViewById(R.id.hitLabel);
+        hitName = findViewById(R.id.hitName);
+        hitSub = findViewById(R.id.hitSub);
+        resultTitle = findViewById(R.id.resultTitle);
+        resultText = findViewById(R.id.resultText);
         logText.setMovementMethod(new ScrollingMovementMethod());
 
         connectBtn = findViewById(R.id.connectBtn);
@@ -107,11 +116,22 @@ public class MainActivity extends AppCompatActivity {
 
         restartCheck = findViewById(R.id.restartCheck);
         muteCheck = findViewById(R.id.muteCheck);
+        // 勾选框反映持久化的设置：默认静音（读写器每读到一次就响一声，很吵）
+        muteCheck.setChecked(Prefs.muteBeep(this));
+        muteCheck.setOnCheckedChangeListener((v, checked) ->
+                Prefs.setMuteBeep(this, checked));
 
         connectBtn.setOnClickListener(v -> connectOrDisconnect());
         readBtn.setOnClickListener(v -> readOnce());
         writeBtn.setOnClickListener(v -> writeOnce());
         uploadBtn.setOnClickListener(v -> uploadCurrent());
+        // 长按标题预览卡片动画 —— 不连读写器、不读标签，所以蜂鸣器不会响。
+        // 挂标题上而不是「上传到云端」按钮：那个按钮没读到标签时是 disabled，
+        // 禁用的控件收不到长按事件（踩过一次）。
+        findViewById(R.id.titleText).setOnLongClickListener(v -> {
+            previewCards();
+            return true;
+        });
         cloudBtn.setOnClickListener(v -> CloudActivity.open(this));
         findViewById(R.id.scanUsbBtn).setOnClickListener(
                 v -> setStatus(usbDiagnostics()));
@@ -304,7 +324,8 @@ public class MainActivity extends AppCompatActivity {
         final int ant = parseInt(antennaEdit, 1);
         final int pw = parseInt(powerEdit, 26);
         final boolean doReset = restartCheck.isChecked();
-        final boolean mute = muteCheck.isChecked();
+        // 蜂鸣器：默认静音（读写器每读到一次就响一声，很吵）。勾选框状态会记住。
+        final boolean mute = Prefs.muteBeep(this);
 
         setStatus("正在连接…");
         worker.execute(() -> {
@@ -398,6 +419,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 TagValidator.Result v = TagValidator.check(id.epc, id.tid);
+                ui.post(this::hideCards);
                 session.lastEpc = id.epc;
                 session.lastTid = id.tid == null ? "(应答里没有)" : id.tid;
                 session.verdict = v;
@@ -488,16 +510,38 @@ public class MainActivity extends AppCompatActivity {
                 ? "连续两次读数相同但第 9 位不符（EPC 应为 0 / TID 应为 2）"
                 : null;
         session.forceAnomaly = false;
-        setStatus("正在上传…");
+        setStatus("正在查云端…");
         worker.execute(() -> {
             try {
-                CloudClient.UploadResult r = Prefs.client(this).upload(epc, tid, note);
+                CloudClient client = Prefs.client(this);
+
+                // 先查库：已经在库里就不再传一遍，只告诉用户命中了哪一条。
+                // touch=true 表示这次确实读到了，云端会把「读到次数」+1 并记时间。
+                CloudClient.Tag hit = client.findByEpc(epc, true);
+                if (hit != null) {
+                    ui.post(() -> {
+                        setStatus(hit.name == null || hit.name.isEmpty()
+                                ? getString(R.string.cloud_hit_unnamed, hit.suffix,
+                                            hit.seenCount, fmtTime(hit.lastSeen))
+                                : getString(R.string.cloud_hit, hit.name, hit.suffix,
+                                            hit.seenCount, fmtTime(hit.lastSeen)));
+                        showHitCard(hit, false);
+                        // 命中但还没命名 —— 顺手让它命名，省得再去列表里找
+                        if (hit.name == null || hit.name.isEmpty()) askName(hit);
+                        updateCloudButtons();
+                    });
+                    return;
+                }
+
+                ui.post(() -> setStatus("正在上传…"));
+                CloudClient.UploadResult r = client.upload(epc, tid, note);
                 String shown = r.tag == null ? epc : r.tag.epc;
                 ui.post(() -> {
                     setStatus(note == null
                             ? getString(R.string.cloud_upload_ok, shown)
                             : getString(R.string.cloud_upload_anomaly, shown));
                     askName(r.tag);
+                    if (r.tag != null) showHitCard(r.tag, true);
                     updateCloudButtons();
                 });
             } catch (Exception e) {
@@ -544,6 +588,153 @@ public class MainActivity extends AppCompatActivity {
         uploadBtn.setEnabled(has);
     }
 
+    /** 云端给的是 UTC 的 {@code YYYY-MM-DD HH:MM:SS}，显示到分钟就够。 */
+    private static String fmtTime(String s) {
+        if (s == null || s.length() < 16) return "-";
+        return s.substring(5, 16);
+    }
+
+    // ------------------------------------------------------------ 结果卡片
+
+    /**
+     * 把一张卡片弹出来：淡入 + 轻微放大，落到 1.0 时再回弹一下。
+     *
+     * <p>没用第三方动画库 —— 就这点效果，ViewPropertyAnimator 足够，
+     * 而且不引依赖。
+     */
+    private static void popIn(View card) {
+        card.setVisibility(View.VISIBLE);
+        card.setAlpha(0f);
+        card.setScaleX(0.85f);
+        card.setScaleY(0.85f);
+        card.animate()
+                .alpha(1f).scaleX(1.06f).scaleY(1.06f)
+                .setDuration(220)
+                .withEndAction(() -> card.animate()
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(120)
+                        .start())
+                .start();
+    }
+
+    /**
+     * 写成功时的强调动画：先猛地放大一下再弹回，同时闪一下背景色。
+     *
+     * <p>刻意做得比"弹出一张卡"更重 —— 写入是用户最关心结果的动作。
+     */
+    private void celebrate(View card) {
+        // 必须先设成可见 —— GONE 的视图动画照跑但什么都看不见
+        // （这个坑踩过一次：只改了 alpha/scale，卡片一直不出现）
+        card.setVisibility(View.VISIBLE);
+        card.setScaleX(0.6f);
+        card.setScaleY(0.6f);
+        card.setAlpha(0f);
+        card.animate()
+                .alpha(1f).scaleX(1.12f).scaleY(1.12f)
+                .setDuration(260)
+                .withEndAction(() -> card.animate()
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(160)
+                        .start())
+                .start();
+        // 背景闪一下，让余光也能看到
+        card.setBackgroundResource(R.drawable.bg_card_ok);
+        card.postDelayed(() -> card.setBackgroundResource(R.drawable.bg_card_ok), 400);
+    }
+
+    /** 显示"命中云端"或"刚上传"的卡片。 */
+    private void showHitCard(CloudClient.Tag t, boolean justUploaded) {
+        boolean unnamed = t.name == null || t.name.isEmpty();
+        hitLabel.setText(justUploaded ? R.string.hit_label_new
+                : (unnamed ? R.string.hit_label_unnamed : R.string.hit_label));
+        hitName.setText(unnamed ? getString(R.string.cloud_unnamed) : t.name);
+        hitName.setTextColor(unnamed ? 0xFFB26A00 : 0xFF0D47A1);
+
+        StringBuilder sb = new StringBuilder(getString(R.string.hit_sub,
+                t.suffix, t.seenCount, fmtTime(t.lastSeen)));
+        if (t.writeCount > 0) {
+            sb.append("　写过 ").append(t.writeCount).append(" 次");
+            if (t.lastWritten != null && t.lastWritten.length() >= 16) {
+                sb.append("（最后 ").append(fmtTime(t.lastWritten)).append("）");
+            }
+        }
+        hitSub.setText(sb.toString());
+
+        hitCard.setBackgroundResource(justUploaded
+                ? R.drawable.bg_card_new : R.drawable.bg_card_hit);
+        popIn(hitCard);
+    }
+
+    private void hideCards() {
+        hitCard.setVisibility(View.GONE);
+        resultCard.setVisibility(View.GONE);
+    }
+
+    /**
+     * 预览卡片动画 —— <b>不碰读写器，不会响蜂鸣器</b>。
+     *
+     * <p>为什么需要它：想看动画效果就得读一次标签，而读写器每读到一次标签就响一声，
+     * 调 UI 的时候很烦。所以单独做一个只用假数据的预览。
+     *
+     * <p>触发方式：长按主页的「上传到云端」按钮。
+     */
+    private void previewCards() {
+        CloudClient.Tag demo = new CloudClient.Tag();
+        demo.epc = "E28069150000402008B83072";
+        demo.suffix = "83072";
+        demo.name = "周-教职";
+        demo.status = "ok";
+        demo.seenCount = 12;
+        demo.lastSeen = "2026-09-21 08:46:10";
+        demo.writeCount = 3;
+        demo.lastWritten = "2026-09-21 08:40:02";
+
+        hideCards();
+        setStatus("预览：命中云端卡片（假数据，没有读写标签）");
+        showHitCard(demo, false);
+
+        // 2.2 秒后换成"写入成功"卡片，把强调动画也演一遍
+        hitCard.postDelayed(() -> {
+            hitCard.setVisibility(View.GONE);
+            setStatus("预览：写入成功卡片（假数据）");
+            showWriteResult(true,
+                    "当前标签  EPC=E28069150000402008B83072\n"
+                            + "写 EPC 区  成功 ✓（1 轮）   回读=E28069150000402008B83072\n"
+                            + "写 TID 区  成功 ✓（1 轮）   回读=E28069152000402008B83072\n");
+        }, 2200);
+    }
+
+    /** 显示写入结果：成功用绿卡 + 强调动画，失败用红卡。 */
+    private void showWriteResult(boolean ok, String report) {
+        resultTitle.setText(ok ? R.string.result_ok : R.string.result_fail);
+        resultTitle.setTextColor(ok ? 0xFF1B5E20 : 0xFFB71C1C);
+        resultText.setText(report);
+        resultText.setTextColor(ok ? 0xFF1B5E20 : 0xFFB71C1C);
+        resultCard.setBackgroundResource(ok ? R.drawable.bg_card_ok : R.drawable.bg_card_bad);
+        if (ok) {
+            celebrate(resultCard);
+        } else {
+            popIn(resultCard);
+        }
+    }
+
+    /**
+     * 写成功之后向云端报一次「写过一次」。
+     *
+     * <p><b>只有 EPC 和 TID 两个区都写成功才调</b>，所以判断放在调用处。
+     * 上报失败不影响本地结果 —— 只是云端计数少一次，不值得打断用户。
+     */
+    private void reportWritten(String epc) {
+        if (epc == null || epc.isEmpty() || !Prefs.isConfigured(this)) return;
+        worker.execute(() -> {
+            try {
+                Prefs.client(this).markWritten(epc);
+            } catch (Exception ignored) {
+                // 计数而已，失败就算了
+            }
+        });
+    }
+
     // ------------------------------------------------------------ 写
 
     private void writeOnce() {
@@ -558,16 +749,20 @@ public class MainActivity extends AppCompatActivity {
             try {
                 byte[] epc = RfidFrame.unhex(epcHex);
                 byte[] tid = RfidFrame.unhex(tidHex);
-                String report = session.reader.writeEpcAndTid(epc, 2, tid, 0);
+                RfidReader.WriteReport rep = session.reader.writeEpcAndTid(epc, 2, tid, 0);
                 String raw = session.transport.takeLog();
-                session.lastStatus = report;
+                session.lastStatus = rep.text;
                 ui.post(() -> {
-                    setStatus(report);
+                    setStatus(rep.ok ? "写入完成" : "写入未完成");
+                    hitCard.setVisibility(View.GONE);
+                    showWriteResult(rep.ok, rep.text);
                     appendLog(raw);
                     // 注意：这里**不要**顺手 readOnce()。
                     // 它会把刚写出来的报告立刻覆盖成「读到标签」，
                     // 于是写入到底成没成功根本看不见。
                 });
+                // 两个区都写成功才向云端记一次 —— 写失败不算
+                if (rep.ok) reportWritten(epcHex);
             } catch (IllegalArgumentException e) {
                 session.lastStatus = "Hex 格式不对：" + e.getMessage();
                 ui.post(() -> setStatus(session.lastStatus));

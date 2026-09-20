@@ -92,6 +92,20 @@ public final class Prefs {
         sp(c).edit().putBoolean("auto_upload", v).apply();
     }
 
+    /**
+     * 是否关掉读写器蜂鸣器。**默认开（= 静音）**。
+     *
+     * <p>读写器每盘存到一个标签就响一声，调试时连读几下就很吵。所以默认静音，
+     * 想听响铃再关掉这个开关。
+     */
+    public static boolean muteBeep(Context c) {
+        return sp(c).getBoolean("mute_beep", true);
+    }
+
+    public static void setMuteBeep(Context c, boolean v) {
+        sp(c).edit().putBoolean("mute_beep", v).apply();
+    }
+
     /** 有没有可用的 key（编译进来或用户填的）。 */
     public static boolean isConfigured(Context c) {
         return !apiKey(c).isEmpty();

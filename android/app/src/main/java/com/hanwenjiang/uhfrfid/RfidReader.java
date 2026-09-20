@@ -299,11 +299,24 @@ public class RfidReader {
         return false;
     }
 
+    /** 一次完整写入的结果。 */
+    public static final class WriteReport {
+        /** EPC 和 TID **两个区都写成功** 才算 true —— 云端计数只认这个。 */
+        public final boolean ok;
+        /** 给界面显示的报告全文。 */
+        public final String text;
+
+        WriteReport(boolean ok, String text) {
+            this.ok = ok;
+            this.text = text;
+        }
+    }
+
     /**
      * 完整写一次：读当前 EPC → 设匹配 → 写 EPC → 回读 → 写 TID → 回读。
      * 对应电脑端的 {@code tag_write_epc_tid.py}。
      */
-    public String writeEpcAndTid(byte[] epc, int epcStart, byte[] tid, int tidStart)
+    public WriteReport writeEpcAndTid(byte[] epc, int epcStart, byte[] tid, int tidStart)
             throws IOException {
         StringBuilder r = new StringBuilder();
 
@@ -311,8 +324,9 @@ public class RfidReader {
         //    注意这里用 0x81 读内存，**不能用 0x8A 盘存** —— 0x8A 之后的写入会一直失败。
         byte[] cur = readCurrentEpc();
         if (cur == null) {
-            return "场上没读到标签（0x81 读 EPC 区无数据）。\n"
-                    + "把标签贴近天线，或换个天线口/功率再试。";
+            return new WriteReport(false,
+                    "场上没读到标签（0x81 读 EPC 区无数据）。\n"
+                            + "把标签贴近天线，或换个天线口/功率再试。");
         }
         r.append("当前标签  EPC=").append(RfidFrame.hex(cur)).append('\n');
 
@@ -338,7 +352,7 @@ public class RfidReader {
             r.append("  → 已跳过 TID 写入：EPC 没改成的话，只写 TID 会让这颗标签的 "
                     + "EPC/TID 不配对（第 9 位不再是 0/2），之后每次读都会被判不合格。\n");
             r.append("     换一颗新标签，或先确认这颗标签的 EPC 区是不是被锁了。\n");
-            return r.toString();
+            return new WriteReport(false, r.toString());
         }
 
         // 4) EPC 变了，匹配得跟着更新 —— 否则后面写 TID 时读写器锁定的还是旧 EPC。
@@ -364,6 +378,7 @@ public class RfidReader {
                     + "要写可改的存储区可以用 USER 区 bank 3）\n");
         }
 
-        return r.toString();
+        // 两个区都写成功才算一次成功的写入 —— 云端计数就认这个
+        return new WriteReport(w2.ok, r.toString());
     }
 }
