@@ -148,11 +148,22 @@ public class RfidReader {
      */
     public byte[] readCurrentEpc() throws IOException {
         // EPC 区字 2 起才是 EPC 本身（字 0-1 是 CRC + PC）
-        byte[] p = readBank(1, 2, 6);
-        if (p == null || p.length < 5 + 12) return null;
-        byte[] epc = RfidFrame.slice(p, 5, 12);
-        for (byte b : epc) {
-            if (b != 0) return epc;
+        for (int attempt = 1; attempt <= 2; attempt++) {
+            byte[] p = readBank(1, 2, 6);
+            if (p != null && p.length >= 5 + 12) {
+                byte[] epc = RfidFrame.slice(p, 5, 12);
+                for (byte b : epc) {
+                    if (b != 0) return epc;
+                }
+            }
+            if (attempt == 1) {
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
         }
         return null;
     }
@@ -311,7 +322,17 @@ public class RfidReader {
             r.append("  ⚠ ").append(w1.error).append('\n');
         }
 
-        // 4) 写 TID —— 这个标签的 TID 是可写的（实测能改），所以同样重写到成功
+        // 4) EPC 变了，匹配得跟着更新 —— 否则后面写 TID 时读写器锁定的还是旧 EPC。
+        //    电脑端的 tag_write_epc_tid.py 也做这一步（"EPC 已变，更新匹配"）。
+        if (w1.ok) {
+            byte[] now = readCurrentEpc();
+            if (now != null && !RfidFrame.hex(now).equalsIgnoreCase(RfidFrame.hex(cur))) {
+                say("EPC 已变，更新匹配为 " + RfidFrame.hex(now));
+                armEpcMatch(now);
+            }
+        }
+
+        // 5) 写 TID —— 实测这颗标签的 TID 是可写的，所以同样重写到成功
         say("写 TID 区：起始字 " + tidStart + "，" + (tid.length / 2) + " 字");
         WriteResult w2 = writeBankVerified(2, tidStart, tid, "TID 区");
         r.append("写 TID 区  ").append(w2.ok ? "成功 ✓" : "失败 ✗")
@@ -320,7 +341,7 @@ public class RfidReader {
                 .append('\n');
         if (!w2.ok) {
             r.append("  ⚠ ").append(w2.error).append('\n');
-            r.append("  （部分标签的 TID 是出厂只读的，写不进去属正常；"
+            r.append("  （标准 Gen2 的 TID 是出厂只读的，写不进去属正常；"
                     + "要写可改的存储区可以用 USER 区 bank 3）\n");
         }
 
