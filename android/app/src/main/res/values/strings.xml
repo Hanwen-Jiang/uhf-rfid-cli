@@ -15,7 +15,7 @@
     <string name="epc_prefix_label">EPC 前缀（写标签时短输入自动补这一段，到 8B）</string>
     <string name="scan_usb_short">扫描</string>
     <string name="no_device_hint">插上 OTG 线和读写器就会自动连接。没反应就点「连接」。</string>
-    <string name="settings_tip">「连接后复位」对齐原 GUI 的连接预处理，一般保持开启。「关蜂鸣器」发 0x7A 00 —— 注意部分读写器的蜂鸣器是硬件驱动的，软件关不掉（本机就是这样）。「读完自动上传」关掉后就得手点上传。\n\n提示：长按顶部标题可以预览卡片动画，不会读写标签。</string>
+    <string name="settings_tip">「连接后复位」对齐原 GUI 的连接预处理，一般保持开启。「关蜂鸣器」发 0x7A 00 —— 注意部分读写器的蜂鸣器是硬件驱动的，软件关不掉（本机就是这样）。「读完自动上传」关掉后就得在这一页上面手点「上传到云端」。</string>
     <string name="restart">连接后复位</string>
     <string name="mute">关蜂鸣器</string>
     <string name="not_connected">未连接。插上 OTG 线后点「连接」。</string>
@@ -86,4 +86,81 @@
     <string name="cloud_read_first">先读一次标签再上传</string>
     <string name="cloud_bad_twice">连续两次读数相同但不合格 —— 已按异常破例上传并记录</string>
     <string name="cloud_bad_once">不合格：%s\n\n再读一次，若两次读数相同就破例上传并记为异常。</string>
+    <!-- 底部标签页 -->
+    <string name="tab_home">读 / 写</string>
+    <string name="tab_library">标签库</string>
+    <string name="tab_manual">古法写入</string>
+    <string name="tab_settings">设置</string>
+
+    <!-- 主页 -->
+    <string name="read_short">读标签</string>
+    <string name="write_pick">选择标签写入…</string>
+    <string name="write_pick_hint">从云端标签库里挑一颗，直接写进贴近天线的这颗标签。</string>
+    <string name="write_target">将写入：%1$s　后 5 位 %2$s</string>
+    <string name="write_target_none">还没选要写的标签</string>
+    <string name="pick_title">挑一颗要写的标签</string>
+    <string name="pick_filter_hint">按名称或后 5 位筛选</string>
+    <string name="pick_empty">标签库是空的。先读一颗标签上传，或者到「标签库」页刷新。</string>
+    <string name="pick_need_cache">补全数据还没拉回来 —— 到「标签库」页刷新一下。</string>
+
+    <!-- 古法写入 -->
+    <string name="manual_hint">手动敲 EPC / TID 的十六进制值。边敲边按云端已有的标签补全（最后几位序号留给自己敲）。</string>
+    <string name="radio_section">读写器</string>
+    <string name="cloud_section">云端</string>
+    <string name="preview_cards">预览动画</string>
+    <string name="need_connect_first">还没连上读写器。点顶栏右边那颗 USB 图标连接。</string>
+    <string name="reading">读取中…</string>
+    <string name="read_ok">读到标签（%1$d ms）</string>
+    <string name="read_none">没读到标签。把标签贴近天线，或换个天线口/功率再试。</string>
+    <string name="query_failed">查询失败：%1$s</string>
+    <string name="write_failed">写入失败：%1$s</string>
+    <string name="write_ok_short">写入成功</string>
+    <string name="write_fail_short">写入未完成，看下面的报告</string>
+    <string name="anomaly_note">连续两次读数相同但第 9 位不符（EPC 应为 0 / TID 应为 2）</string>
+    <string name="cloud_checking">正在查云端…</string>
+    <string name="cloud_uploading">正在上传…</string>
+    <string name="cloud_renamed">已命名：%1$s</string>
+    <string name="row_suffix">后 5 位 %1$s</string>
+    <string name="row_anomaly">异常</string>
+    <string name="row_seen">读到 %1$d 次</string>
+    <string name="row_written">写过 %1$d 次</string>
+    <string name="reload_needed">读/写相关的操作要连上读写器才能用。</string>
+    <!-- 连接 / 诊断 -->
+    <string name="connecting">正在连接…</string>
+    <string name="connected">已连接 %1$s</string>
+    <string name="connect_failed">连接失败：%1$s</string>
+    <string name="firmware_line">固件 %1$s</string>
+    <string name="radio_line">天线 %1$d  功率 %2$d</string>
+    <string name="disconnected">连接已断开：%1$s</string>
+    <string name="disconnected_manual">已断开。</string>
+    <string name="device_unplugged">USB 被拔掉了</string>
+    <string name="perm_denied">USB 权限被拒绝。没有权限就打不开串口。</string>
+    <string name="requesting_perm">请求 USB 权限：%1$s …</string>
+    <string name="no_device_found">没找到 USB 串口设备。检查：① OTG 线插好（要能传数据）② 手机支持 USB Host ③ 小米/红米：「设置 → 更多设置 → OTG」要打开</string>
+    <string name="diag_header">手机上看到的 USB 设备：</string>
+    <string name="diag_count">共 %1$d 个</string>
+    <string name="diag_yes">有</string>
+    <string name="diag_no">无</string>
+    <string name="diag_no_device">没有 USB 设备</string>
+    <string name="diag_no_perm">没有 USB 权限</string>
+    <string name="diag_open_failed">打不开 USB 设备</string>
+    <string name="diag_probe">CH34x 芯片寄存器探测（期望 0x5F 返回的第 2 字节 = 00）：</string>
+    <!-- 设置页 -->
+    <string name="cache_count">补全数据：%1$d 条（来自云端，只在这页和标签库页刷新）</string>
+    <string name="cache_empty">补全数据还没拉回来 —— 到「标签库」页刷新一下</string>
+    <string name="settings_saved">已保存：天线 %1$d　功率 %2$d</string>
+    <string name="cloud_reset_done">已恢复默认。</string>
+    <string name="preview_running">预览：卡片动画（假数据，不读写标签）</string>
+    <string name="preview_done">预览：写入成功（假数据）</string>
+    <!-- 古法写入 -->
+    <string name="manual_short">还没输满 %1$d 位（EPC %2$d，TID %3$d）</string>
+    <string name="manual_mismatch">EPC 和 TID 的后 15 位不一致，写完这颗标签会被判「不合格」</string>
+    <string name="manual_empty">先在 EPC / TID 里填要写的 Hex 值。</string>
+    <string name="manual_bad_hex">Hex 格式不对：%1$s</string>
+    <!-- 标签库 / 命名 -->
+    <string name="cloud_name_title">命名</string>
+    <string name="cloud_name_msg">%1$s\n后 5 位 %2$s</string>
+    <string name="cloud_row_msg">后 5 位 %1$s\n点「保存」改名，或点「删除」从库里删掉。</string>
+    <string name="cloud_delete_title">确定删除？</string>
+    <string name="cloud_write_msg">%1$s\nEPC: %2$s\n\n（同时写入它的 TID）</string>
 </resources>

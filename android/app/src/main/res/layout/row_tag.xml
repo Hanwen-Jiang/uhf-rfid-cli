@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  一行标签。标签库列表和"挑一颗来写"的弹窗共用。
+
+  descendantFocusability="blocksDescendants" 是必须的：
+  行里有 Button，会抢走焦点，导致 ListView 的整行点击失效（踩过）。
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:descendantFocusability="blocksDescendants"
@@ -14,27 +21,34 @@
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/rowTitle"
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/nameText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
+            android:textSize="17sp"
             android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/rowSub"
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/subText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/epcText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
-            android:textSize="11sp" />
+            android:textSize="13sp" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/rowWrite"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/writeBtn"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
         android:minWidth="0dp"
-        android:text="@string/cloud_write" />
-
+        android:text="@string/cloud_write"
+        android:textSize="13sp"
+        app:cornerRadius="10dp" />
 </LinearLayout>

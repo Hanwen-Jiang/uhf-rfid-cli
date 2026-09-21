@@ -1,271 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  根布局必须带 fitsSystemWindows="true"。
+  主界面：顶栏 + 内容区 + 底部标签页。
 
-  targetSdk 35 起 Android 强制「边到边」(edge-to-edge) 显示：内容会画到状态栏
-  和导航栏底下，ActionBar 也会压在上面 —— 表现就是顶部那一排按钮被顶栏挡住。
-  fitsSystemWindows 让框架自动给根布局加上状态栏/导航栏高度的内边距。
+  fitsSystemWindows 必须留着：targetSdk 35 起强制边到边显示，内容会画到状态栏
+  底下，顶栏会被挡住。
+
+  读写器的「连接/断开」「扫描」在顶栏右侧，不占标签页。
 -->
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:fitsSystemWindows="true">
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
 
-    <LinearLayout
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:title="@string/app_name"
+        app:titleTextColor="#FFFFFF" />
+
+    <FrameLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <TextView
-            android:id="@+id/titleText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textSize="22sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/mode_hint"
-            android:textSize="12sp" />
-
-        <!-- 连接 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
-
-
-            <Button
-                android:id="@+id/readBtn"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:text="@string/read" />
-        </LinearLayout>
-
-
-        <!-- 射频参数（天线口 / 功率）挪到设置页了，主页不放这两个输入框。
-             当前值在「连接」按钮下面那行状态里能看到。 -->
-
-        <!-- 状态 -->
-        <TextView
-            android:id="@+id/statusText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="#11000000"
-            android:padding="10dp"
-            android:text="@string/not_connected"
-            android:textIsSelectable="true" />
-
-        <!-- 结果 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/epc"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/epcText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:text="—"
-            android:textIsSelectable="true"
-            android:textSize="16sp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/tid"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/checkText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tidText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:text="—"
-            android:textIsSelectable="true"
-            android:textSize="16sp" />
-
-        <!-- 命中云端 / 刚上传：一张显眼的卡片，默认隐藏，出事才动画弹出来 -->
-        <LinearLayout
-            android:id="@+id/hitCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_card_hit"
-            android:orientation="vertical"
-            android:padding="14dp"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/hitLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:letterSpacing="0.08"
-                android:text="@string/hit_label"
-                android:textColor="#1565C0"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/hitName"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="#0D47A1"
-                android:textSize="24sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/hitSub"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:fontFamily="monospace"
-                android:textColor="#1565C0"
-                android:textSize="13sp" />
-        </LinearLayout>
-
-        <!-- 写入结果 -->
-        <LinearLayout
-            android:id="@+id/resultCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_card_ok"
-            android:orientation="vertical"
-            android:padding="14dp"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/resultTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="20sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/resultText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:fontFamily="monospace"
-                android:textIsSelectable="true"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <!-- 云端：上传当前这颗 / 打开列表 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/uploadBtn"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:enabled="false"
-                android:text="@string/cloud_upload" />
-
-            <Button
-                android:id="@+id/cloudBtn"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:text="@string/cloud_open" />
-        </LinearLayout>
-
-        <!-- 写 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/write_section"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/epcEdit"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/epc_hint"
-            android:inputType="textNoSuggestions"
-            android:text="E28069150000402008B83072" />
-
-        <EditText
-            android:id="@+id/tidEdit"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/tid_hint"
-            android:inputType="textNoSuggestions"
-            android:text="E28069152000402008B83072" />
-
-        <!-- 实际会写进去的值。短输入会自动补全前缀、TID 自动跟着 EPC 推出来，
-             所以把最终值明明白白显示出来，免得补错了还不知道。 -->
-        <!-- 只在出问题时才显示（值没输满 / EPC 与 TID 尾巴不一致），
-             正常情况下是 GONE —— 输入框自己会补全，不需要再重复一遍 -->
-        <TextView
-            android:id="@+id/writePreview"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="#B71C1C"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
-        <Button
-            android:id="@+id/writeBtn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/write" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/write_note"
-            android:textSize="12sp" />
-
-        <!-- 原始报文 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="@string/raw_log"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/logText"
-            android:layout_width="match_parent"
-            android:layout_height="180dp"
-            android:background="#11000000"
-            android:fontFamily="monospace"
-            android:padding="8dp"
-            android:textIsSelectable="true"
-            android:textSize="11sp" />
-
-    </LinearLayout>
-</ScrollView>
+        android:background="?attr/colorPrimary"
+        app:itemIconTint="@color/nav_item"
+        app:itemTextColor="@color/nav_item"
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/bottom_nav" />
+</LinearLayout>

@@ -19,6 +19,7 @@ import java.util.List;
  */
 public final class TagCache {
 
+    private static final List<CloudClient.Tag> TAGS = new ArrayList<>();
     private static final List<String> EPCS = new ArrayList<>();
     private static final List<String> TIDS = new ArrayList<>();
     private static volatile long updatedAt;
@@ -29,9 +30,11 @@ public final class TagCache {
 
     /** 用刚从云端拉到的标签刷新缓存。 */
     public static synchronized void put(List<CloudClient.Tag> tags) {
+        TAGS.clear();
         EPCS.clear();
         TIDS.clear();
         if (tags != null) {
+            TAGS.addAll(tags);
             for (CloudClient.Tag t : tags) {
                 if (t == null || t.epc == null || t.epc.isEmpty()) continue;
                 String e = TagWrite.norm(t.epc);
@@ -54,6 +57,11 @@ public final class TagCache {
 
     public static String lastError() {
         return lastError;
+    }
+
+    /** 完整的标签列表（挑一颗来写时用）。 */
+    public static synchronized List<CloudClient.Tag> tags() {
+        return new ArrayList<>(TAGS);
     }
 
     public static synchronized List<String> epcs() {

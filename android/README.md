@@ -248,6 +248,45 @@ java -cp /tmp/jt com.hanwenjiang.uhfrfid.RfidFrameSelfTest re/capture53.hex
 - **打开串口本身会偶发失败**（CH34x 初始化握手报
   `Expected 0x0 byte, but get 0xec [init #1]`），所以连接也做了 3 次重试。
 
+## 界面结构
+
+底部四个标签页，读写器的连接状态在顶栏那颗 USB 图标上（绿=已连，灰带斜杠=没连）。
+
+| 页 | 干什么 |
+|---|---|
+| **读 / 写** | 「读标签」和「上传到云端」并排 —— 自动上传失败时立刻能手点重传。下面是从标签库里挑一颗直接写。 |
+| **标签库** | 云端列表：命名、删除、一键写入。也是补全数据的刷新入口。 |
+| **古法写入** | 手敲 EPC / TID 的十六进制值，边敲边按云端已有标签补全。 |
+| **设置** | 天线口、功率、连接后复位、关蜂鸣器、自动上传、云端地址/key/使用者。 |
+
+正常写标签就是：**主页点「选择标签写入…」→ 挑一颗 → 确认 → 写**。
+「古法写入」只在需要手工指定值的时候才用。
+
+### UI 框架
+
+用的就是官方 **Material Components**（`com.google.android.material:material:1.12.0`，
+项目里本来就有，没引第三方）。用到的：`BottomNavigationView` 底部导航、
+`MaterialToolbar` 顶栏、`MaterialCardView` 卡片、`TextInputLayout` 带浮动标签的输入框、
+`MaterialButton`、`MaterialCheckBox`。
+
+### 代码结构
+
+```
+MainActivity        宿主：USB 连接 + 标签页切换
+HomeFragment        读标签 / 上传 / 从库里挑一颗来写
+LibraryFragment     云端标签库
+ManualFragment      古法写入
+SettingsFragment    设置
+TagRowAdapter       标签列表的一行（标签库和挑弹窗共用）
+Bg                  单线程后台执行器
+```
+
+> `Bg` 是**单线程**的，这是刻意的：读、写、查云端都要碰同一个串口，
+> 两个页面同时操作会互相踩。串行从根上避免这件事。
+
+**测试卡片动画**：设置页有「预览动画」按钮，用假数据演一遍，**不碰读写器、蜂鸣器不响**。
+（这台机器的蜂鸣器是硬件驱动的，`0x7A 00` 关不掉 —— 调试 UI 别用真标签。）
+
 ## 云端标签库（Cloudflare Worker + D1）
 
 App 可以把读到的标签传到云端、命名、以及从云端列表**一键写入**。
