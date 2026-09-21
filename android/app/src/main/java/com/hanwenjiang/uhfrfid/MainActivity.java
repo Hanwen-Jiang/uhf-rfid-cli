@@ -717,10 +717,12 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
-        // 连接/断开的文字要随状态变，所以每次显示前刷一遍
+        // 连接那颗图标要随状态换：连上=绿色 USB，没连=灰色带斜杠。
+        // 颜色直接写在 vector 文件里，不靠主题 tint —— 主题 tint 会把它统一成白色。
         if (connectItem != null) {
-            connectItem.setTitle(session.isConnected()
-                    ? R.string.disconnect : R.string.connect);
+            boolean on = session.isConnected();
+            connectItem.setIcon(on ? R.drawable.ic_usb_on : R.drawable.ic_usb_off);
+            connectItem.setTitle(on ? R.string.disconnect : R.string.connect);
         }
         return super.onPrepareOptionsMenu(menu);
     }

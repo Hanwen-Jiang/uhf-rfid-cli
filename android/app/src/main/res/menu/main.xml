@@ -3,18 +3,24 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <!--
-      右上角：连接/断开 + 扫描。
-      「设置」不在菜单里 —— 它挂在 ActionBar 左上角的 home 图标上
-      （菜单项在 ActionBar 里只会排到右边，想放左边就只能用 home）。
-    -->
-    <item
-        android:id="@+id/action_connect"
-        android:title="@string/connect"
-        app:showAsAction="always" />
+      右上角，从右往左的排布由 orderInCategory 决定：
+      菜单项按 orderInCategory 升序排，所以**数值大的在最右边**。
+      连接放最后（order=2）= 最右。
 
+      「设置」不在这里 —— 它挂在左上角的 home 图标上
+      （菜单项只会排到右边，想放左边只能借 home）。
+    -->
     <item
         android:id="@+id/action_scan"
         android:icon="@drawable/ic_scan"
+        android:orderInCategory="1"
         android:title="@string/scan_usb_short"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_connect"
+        android:icon="@drawable/ic_usb_off"
+        android:orderInCategory="2"
+        android:title="@string/connect"
         app:showAsAction="always" />
 </menu>
