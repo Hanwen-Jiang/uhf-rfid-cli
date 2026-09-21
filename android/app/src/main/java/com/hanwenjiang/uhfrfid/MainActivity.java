@@ -131,7 +131,17 @@ public class MainActivity extends AppCompatActivity {
         });
         tidEdit.addTextChangedListener(new android.text.TextWatcher() {
             public void afterTextChanged(android.text.Editable s) {
-                if (!syncing) tidManual = true;   // 用户自己改过 TID，就别再自动覆盖
+                if (syncing) return;
+                // 用户自己改了 TID：也给它补全，但之后不再由 EPC 自动覆盖
+                tidManual = true;
+                String typed = tidEdit.getText().toString();
+                String done = completeEpc(typed);
+                if (!done.equals(typed)) {
+                    syncing = true;
+                    tidEdit.setText(done);
+                    tidEdit.setSelection(done.length());
+                    syncing = false;
+                }
                 updateWritePreview();
             }
             public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
@@ -1003,19 +1013,30 @@ public class MainActivity extends AppCompatActivity {
      * <p>这批标签的 EPC 前 19 位是固定的（默认 {@code E28069150000502008B}），
      * 只有最后几位在变，所以贴标签时只敲那几位就够了。
      *
-     * <p>规则很简单，而且界面上会实时显示补完的结果：
-     * <ul>
-     *   <li>够 24 位 → 当成完整 EPC，原样用（取前 24 位）</li>
-     *   <li>不够 24 位 → 当成尾巴，前缀 + 输入</li>
-     * </ul>
-     * 前缀可以在设置里改。
+     * <p>补全是<b>边输边补</b>的，光标停在末尾 —— 因为前缀补在<b>前面</b>、尾巴在
+     * <b>后面</b>，所以继续往下敲会正确地接在尾巴后面，不会错位。
+     *
+     * <p>但"无脑加前缀"会出事：补完之后用户一退格，长度就不足 24 了，再加一次前缀
+     * 就会叠成 {@code E280...BE280...B}，而且再也删不掉。所以按顺序判断：
+     * <ol>
+     *   <li>空 → 空</li>
+     *   <li>有非法字符 → 原样（交给 unhex 去报错，别乱补）</li>
+     *   <li><b>已经以完整前缀开头</b> → 原样（已经补过了 / 用户自己打全了）</li>
+     *   <li><b>输入是前缀的开头一段</b> → 原样（说明用户正在往前删前缀，别跟他抢）</li>
+     *   <li>够 24 位 → 取前 24 位</li>
+     *   <li>其余 → 前缀 + 输入</li>
+     * </ol>
      */
     private String completeEpc(String raw) {
         String s = raw == null ? "" : raw.replaceAll("[\\s:,-]", "").toUpperCase();
         if (s.isEmpty()) return "";
-        if (!s.matches("[0-9A-F]+")) return s;   // 有非法字符就别乱补，交给 unhex 去报错
+        if (!s.matches("[0-9A-F]+")) return s;
+
+        String prefix = Prefs.epcPrefix(this);
+        if (s.startsWith(prefix)) return s.length() > 24 ? s.substring(0, 24) : s;
+        if (prefix.startsWith(s)) return s;          // 正在删前缀，放行
         if (s.length() >= 24) return s.substring(0, 24);
-        return Prefs.epcPrefix(this) + s;
+        return prefix + s;
     }
 
     /**
@@ -1029,13 +1050,26 @@ public class MainActivity extends AppCompatActivity {
         return epc.substring(0, 8) + "2" + epc.substring(9);
     }
 
-    /** EPC 变了：重算 TID 并刷新预览。 */
+    /** EPC 变了：把补全结果写回输入框，重算 TID，刷新预览。 */
     private void onEpcChanged() {
         if (syncing) return;
-        String epc = completeEpc(epcEdit.getText().toString());
+        String typed = epcEdit.getText().toString();
+        String done = completeEpc(typed);
+
+        // 把补全结果直接写进输入框（用户要的就是"框里自动补全"），
+        // 光标挪到末尾 —— 继续敲会正确接在尾巴后面。
+        if (!done.equals(typed)) {
+            syncing = true;
+            epcEdit.setText(done);
+            epcEdit.setSelection(done.length());
+            syncing = false;
+        }
+
         if (!tidManual) {
             syncing = true;
-            tidEdit.setText(tidFromEpc(epc));
+            String tid = tidFromEpc(done);
+            tidEdit.setText(tid);
+            if (tid.length() > 0) tidEdit.setSelection(tid.length());
             syncing = false;
         }
         updateWritePreview();
