@@ -224,14 +224,16 @@
 
         <!-- 实际会写进去的值。短输入会自动补全前缀、TID 自动跟着 EPC 推出来，
              所以把最终值明明白白显示出来，免得补错了还不知道。 -->
+        <!-- 只在出问题时才显示（值没输满 / EPC 与 TID 尾巴不一致），
+             正常情况下是 GONE —— 输入框自己会补全，不需要再重复一遍 -->
         <TextView
             android:id="@+id/writePreview"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:fontFamily="monospace"
-            android:textColor="#1565C0"
-            android:textSize="12sp" />
+            android:textColor="#B71C1C"
+            android:textSize="12sp"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/writeBtn"

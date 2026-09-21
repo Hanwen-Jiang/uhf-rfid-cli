@@ -1086,19 +1086,34 @@ public class MainActivity extends AppCompatActivity {
         updateWritePreview();
     }
 
-    /** 显示"实际会写进去的值"，补全补错了能一眼看见。 */
+    /**
+     * 输入框自己会补全，所以正常情况下这里<b>什么都不显示</b>
+     * —— 原来那行蓝字（"将写入 EPC … TID …"）是重复信息，删了。
+     *
+     * <p>只在真有问题时才冒出来，而且是红字：值没输满，或者 EPC 和 TID 的尾巴对不上。
+     * 后者要紧 —— 只写进去一个区会让标签不配对，之后每次读数都会被判「不合格」。
+     */
     private void updateWritePreview() {
         String epc = completeEpc(epcEdit.getText().toString());
-        // TID 用 TID 自己的前缀 —— 它第 9 位是 2，和 EPC 不共用前缀
         String tid = completeTid(tidEdit.getText().toString());
-        // 再核一遍：两边的"尾巴"必须一致，不一致就是补错了，直接标出来
-        String tailWarn = "";
-        if (epc.length() == 24 && tid.length() == 24
-                && !epc.substring(9).equals(tid.substring(9))) {
-            tailWarn = "\n⚠ EPC 和 TID 的后 15 位不一致，写完这颗标签会被判「不合格」";
+
+        String warn = null;
+        if (!epc.isEmpty() && !tid.isEmpty()) {
+            if (epc.length() != TagWrite.FULL || tid.length() != TagWrite.FULL) {
+                warn = "还没输满 " + TagWrite.FULL + " 位（EPC " + epc.length()
+                        + "，TID " + tid.length() + "）";
+            } else if (!epc.substring(TagWrite.DIFF + 1)
+                    .equals(tid.substring(TagWrite.DIFF + 1))) {
+                warn = "EPC 和 TID 的后 15 位不一致，写完这颗标签会被判「不合格」";
+            }
         }
-        writePreview.setText(epc.isEmpty() && tid.isEmpty() ? ""
-                : "将写入\nEPC  " + epc + "\nTID  " + tid + tailWarn);
+        if (warn == null) {
+            writePreview.setVisibility(View.GONE);
+        } else {
+            writePreview.setText("⚠ " + warn);
+            writePreview.setTextColor(0xFFB71C1C);
+            writePreview.setVisibility(View.VISIBLE);
+        }
     }
 
     // ------------------------------------------------------------ 写
