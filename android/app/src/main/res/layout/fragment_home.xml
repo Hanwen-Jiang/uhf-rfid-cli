@@ -140,53 +140,48 @@
         </LinearLayout>
 
         <!--
-          分裂按钮：左半边是「写入」（选中哪颗就显示哪颗），右半边一个小三角是下拉，
-          点它才打开挑选。两块各自砍掉内侧的圆角，拼起来像一个控件。
+          写标签：<b>一个</b>按钮，右边划一条热区当"下拉"。
+          不用两个按钮拼 —— 那样各自画背景和阴影，永远有接缝、也不像一个控件。
+          圆角交给 cornerRadius（注意：设了它就会盖掉 shapeAppearanceOverlay，
+          两边别同时写）。
         -->
-        <LinearLayout
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
+            android:layout_height="52dp"
+            android:layout_marginTop="8dp">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/writeBtn"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 android:ellipsize="end"
                 android:enabled="false"
-                android:insetBottom="0dp"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:insetTop="0dp"
                 android:maxLines="1"
+                android:paddingEnd="64dp"
                 android:text="@string/write_now"
                 android:textSize="15sp"
-                app:cornerRadius="0dp"
-                app:elevation="1dp"
-                app:shapeAppearanceOverlay="@style/Shape.LeftHalf" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/pickWriteBtn"
-                android:layout_width="52dp"
-                android:layout_height="48dp"
-                android:insetBottom="0dp"
-                android:insetLeft="0dp"
-                android:insetRight="0dp"
-                android:insetTop="0dp"
-                android:minWidth="0dp"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"
-                android:text=""
-                app:cornerRadius="0dp"
-                app:elevation="1dp"
+                app:cornerRadius="12dp"
                 app:icon="@drawable/ic_drop_down"
-                app:iconGravity="textStart"
-                app:iconPadding="0dp"
-                app:shapeAppearanceOverlay="@style/Shape.RightHalf"
-                app:strokeWidth="0dp" />
-        </LinearLayout>
+                app:iconGravity="end"
+                app:iconPadding="16dp" />
 
+            <!-- 分隔线：让"这里可以下拉"看得出来 -->
+            <View
+                android:layout_width="1dp"
+                android:layout_height="24dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="56dp"
+                android:background="#66FFFFFF" />
+
+            <!-- 透明热区，只为接下拉的点击 -->
+            <View
+                android:id="@+id/dropZone"
+                android:layout_width="56dp"
+                android:layout_height="match_parent"
+                android:layout_gravity="end"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="false" />
+        </FrameLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

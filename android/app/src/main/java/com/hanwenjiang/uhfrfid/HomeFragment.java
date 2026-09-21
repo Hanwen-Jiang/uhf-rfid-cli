@@ -36,7 +36,7 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
 
     private MaterialCardView panel;
     private TextView statusText, epcText, tidText, checkText, hitName, hitSub;
-    private MaterialButton uploadBtn, writeBtn, pickWriteBtn;
+    private MaterialButton uploadBtn, writeBtn;
 
     /** 用户挑好、准备写进去的那颗云端标签。 */
     private CloudClient.Tag target;
@@ -60,13 +60,10 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         hitSub = v.findViewById(R.id.hitSub);
         uploadBtn = v.findViewById(R.id.uploadBtn);
         writeBtn = v.findViewById(R.id.writeBtn);
-        pickWriteBtn = v.findViewById(R.id.pickWriteBtn);
-
         v.findViewById(R.id.readBtn).setOnClickListener(x -> readOnce(false));
         uploadBtn.setOnClickListener(x -> uploadCurrent());
-        // 左边只挑（选中而已，不动标签）
-        pickWriteBtn.setOnClickListener(x -> pickTag());
-        // 右边才真写
+        // 按钮主体 = 写；右边那条透明热区 = 下拉挑标签
+        v.findViewById(R.id.dropZone).setOnClickListener(x -> pickTag());
         writeBtn.setOnClickListener(x -> {
             if (target == null) {
                 setStatus(getString(R.string.write_target_none));
@@ -388,15 +385,19 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         return t.name == null || t.name.isEmpty() ? "(未命名)" : t.name;
     }
 
-    /** 挑好的那颗直接写在按钮上，不用另外占一行。 */
+    /**
+     * 挑好的那颗直接写在按钮上。
+     *
+     * <p>没挑的时候按钮是灰的（点了也没意义），但右边的下拉热区一直可用 ——
+     * 灰按钮点不动，挑标签的入口不能跟着一起失效。
+     */
     private void updatePickButton() {
-        if (pickWriteBtn == null) return;
-        // 选中的信息显示在「写入」主按钮上；右半边只是下拉三角，不显示文字
+        if (writeBtn == null) return;
         writeBtn.setText(target == null
                 ? getString(R.string.write_now)
                 : getString(R.string.write_now_target,
                         displayName(target), target.suffix));
-        if (writeBtn != null) writeBtn.setEnabled(target != null);
+        writeBtn.setEnabled(target != null);
     }
 
     // ------------------------------------------------------------ 写
