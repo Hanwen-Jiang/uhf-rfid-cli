@@ -141,6 +141,14 @@
                 android:background="#66FFFFFF" />
 
             <!-- 透明热区 = 上传到云端 -->
+            <!--
+              热区必须有比按钮更高的 Z。
+              MaterialButton 默认带 2dp elevation，而 ViewGroup 从 API 21 起是
+              **按 Z 值**（不是 XML 顺序）分发触摸的 —— Z 低的控件就算写在后面、
+              画在上面，按钮仍然会把点击吃掉。踩过：按钮一从禁用变可用，
+              下拉就点不动了（禁用时不响应触摸，热区才拿得到）。
+              outlineProvider="none" 是为了提 Z 但不投影。
+            -->
             <View
                 android:id="@+id/uploadZone"
                 android:layout_width="56dp"
@@ -148,7 +156,9 @@
                 android:layout_gravity="end"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
-                android:focusable="false" />
+                android:elevation="6dp"
+                android:focusable="false"
+                android:outlineProvider="none" />
 
             <ImageView
                 android:layout_width="24dp"
@@ -194,6 +204,7 @@
                 android:background="#66FFFFFF" />
 
             <!-- 透明热区，只为接下拉的点击 -->
+            <!-- 同 uploadZone：Z 必须高过按钮，否则点击会被按钮吃掉 -->
             <View
                 android:id="@+id/dropZone"
                 android:layout_width="56dp"
@@ -201,7 +212,9 @@
                 android:layout_gravity="end"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
-                android:focusable="false" />
+                android:elevation="6dp"
+                android:focusable="false"
+                android:outlineProvider="none" />
         </FrameLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
