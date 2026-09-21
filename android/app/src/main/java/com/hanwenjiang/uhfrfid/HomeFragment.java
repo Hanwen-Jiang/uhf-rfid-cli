@@ -55,6 +55,7 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
 
         v.findViewById(R.id.readBtn).setOnClickListener(x -> readOnce(false));
         uploadBtn.setOnClickListener(x -> uploadCurrent());
+        // 写标签就这一个入口：点开挑一颗，确认后才动标签
         v.findViewById(R.id.pickWriteBtn).setOnClickListener(x -> pickTag());
 
         // 从上次读到的状态恢复（切页面回来时不该是空的）
@@ -282,8 +283,9 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         TextView empty = view.findViewById(R.id.emptyText);
 
         List<CloudClient.Tag> shown = new ArrayList<>(all);
+        // 弹窗里那行按钮写「选择」—— 挑的时候只选中，不动标签
         TagRowAdapter adapter = new TagRowAdapter(requireContext(), shown,
-                tag -> writeTag(tag));
+                tag -> selectTag(tag), R.string.pick_select);
         list.setAdapter(adapter);
 
         filter.addTextChangedListener(new android.text.TextWatcher() {
@@ -322,11 +324,25 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
 
     // ------------------------------------------------------------ 写
 
-    /** 挑好一颗之后：记下来，并问要不要马上写。 */
-    private void writeTag(CloudClient.Tag tag) {
+    /**
+     * 在弹窗里挑一颗：记下来、关掉弹窗，然后弹确认框。
+     *
+     * <p>弹窗里那行的按钮写「选这颗」而不是「写入」—— 挑的动作要说清楚是"挑"，
+     * 真正动标签的是后面那个确认框。
+     */
+    private void selectTag(CloudClient.Tag tag) {
         target = tag;
         updateTargetText();
         if (dialog != null) dialog.dismiss();
+        confirmWrite(tag);
+    }
+
+    private static String displayName(CloudClient.Tag t) {
+        return t.name == null || t.name.isEmpty() ? "(未命名)" : t.name;
+    }
+
+    /** 按「写入」之后确认一次，然后才动标签。 */
+    private void confirmWrite(CloudClient.Tag tag) {
         if (!RfidSession.get().isConnected()) {
             setStatus(getString(R.string.need_connect_first));
             return;
@@ -334,8 +350,7 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         new AlertDialog.Builder(requireContext())
                 .setTitle(getString(R.string.cloud_write_title))
                 .setMessage(getString(R.string.cloud_write_msg,
-                        tag.name == null ? getString(R.string.cloud_unnamed) : tag.name,
-                        tag.epc))
+                        displayName(tag), tag.epc))
                 .setPositiveButton(R.string.cloud_write, (d, w) -> doWrite(tag))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
@@ -371,11 +386,15 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
 
     private void updateTargetText() {
         if (writeTargetText == null) return;
-        writeTargetText.setText(target == null
-                ? getString(R.string.write_target_none)
-                : getString(R.string.write_target,
-                        target.name == null ? getString(R.string.cloud_unnamed) : target.name,
-                        target.suffix));
+        // 没挑过就整行不显示 —— 空着比写一句"还没挑标签"安静
+        if (target == null) {
+            writeTargetText.setVisibility(View.GONE);
+        } else {
+            writeTargetText.setVisibility(View.VISIBLE);
+            writeTargetText.setText(getString(R.string.write_target,
+                    displayName(target), target.suffix));
+        }
+
     }
 
     // ------------------------------------------------------------ 卡片和提示

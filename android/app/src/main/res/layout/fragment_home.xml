@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  主页：只做两件事 —— 读标签（顺带自动上传）和写标签（从库里挑一颗直接写）。
-  读写器的连接状态在顶栏那颗图标上，不在这一页里。
+  主页：读标签（顺带自动上传）+ 从库里挑一颗写进去。
+  刻意不放说明文字 —— 按钮自己说明自己，写不下才加一句。
 -->
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -15,39 +15,10 @@
         android:orientation="vertical"
         android:padding="14dp">
 
-        <!-- 读：两个按钮并排，传失败可以马上手点重传 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/readBtn"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/read_short"
-                android:textSize="16sp"
-                app:cornerRadius="10dp"
-                app:icon="@drawable/ic_read" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/uploadBtn"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:text="@string/cloud_upload"
-                android:textSize="16sp"
-                app:cornerRadius="10dp" />
-        </LinearLayout>
-
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/statusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
             android:background="@drawable/bg_status"
             android:padding="10dp"
             android:text="@string/no_device_hint"
@@ -128,26 +99,42 @@
             android:textSize="13sp"
             android:textStyle="bold" />
 
-        <!-- 写标签：从库里挑一颗，直接写 -->
-        <com.google.android.material.textview.MaterialTextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/write_section"
-            android:textSize="15sp"
-            android:textStyle="bold" />
-
-        <com.google.android.material.textview.MaterialTextView
+        <!-- 读：两个按钮并排，自动上传失败时手点右边那个重传 -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/write_pick_hint"
-            android:textSize="12sp" />
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/readBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/read_short"
+                android:textSize="16sp"
+                app:cornerRadius="10dp"
+                app:icon="@drawable/ic_read" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/uploadBtn"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="@string/cloud_upload"
+                android:textSize="16sp"
+                app:cornerRadius="10dp" />
+        </LinearLayout>
+
+        <!-- 写：挑一颗 -> 再点「写入」。挑的时候只选中，不动标签。 -->
+        <!-- 写标签就这一个按钮：点开挑一颗 -> 确认 -> 写 -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/pickWriteBtn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="16dp"
             android:text="@string/write_pick"
             android:textSize="16sp"
             app:cornerRadius="10dp" />
@@ -156,7 +143,7 @@
             android:id="@+id/writeTargetText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:fontFamily="monospace"
             android:textSize="13sp" />
 

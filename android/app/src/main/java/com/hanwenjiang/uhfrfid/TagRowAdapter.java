@@ -22,10 +22,18 @@ public class TagRowAdapter extends ArrayAdapter<CloudClient.Tag> {
     }
 
     private final OnWrite onWrite;
+    private final int actionLabel;
 
     public TagRowAdapter(Context ctx, List<CloudClient.Tag> data, OnWrite onWrite) {
+        this(ctx, data, onWrite, R.string.cloud_write);
+    }
+
+    /** @param actionLabel 行尾按钮的文字：标签库页是「写入」，挑弹窗里是「选择」 */
+    public TagRowAdapter(Context ctx, List<CloudClient.Tag> data, OnWrite onWrite,
+                         int actionLabel) {
         super(ctx, R.layout.row_tag, data);
         this.onWrite = onWrite;
+        this.actionLabel = actionLabel;
     }
 
     @Override
@@ -64,6 +72,7 @@ public class TagRowAdapter extends ArrayAdapter<CloudClient.Tag> {
         sub.setTextColor("anomaly".equals(t.status) ? 0xFFC62828 : 0xFF757575);
 
         epc.setText(t.epc);
+        ((android.widget.Button) write).setText(actionLabel);
         write.setOnClickListener(x -> onWrite.onWrite(t));
         return v;
     }

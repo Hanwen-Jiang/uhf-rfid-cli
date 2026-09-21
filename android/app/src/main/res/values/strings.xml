@@ -21,10 +21,10 @@
     <string name="not_connected">未连接。插上 OTG 线后点「连接」。</string>
     <string name="epc">EPC</string>
     <string name="tid">TID</string>
-    <string name="write_section">写入（对应原 GUI 6C 读写标签页：访问密码 00000000，EPC 起始字 2，TID 起始字 0）</string>
+    <string name="write_section">选择标签写入</string>
     <string name="epc_hint">EPC（Hex，12 字节）</string>
     <string name="tid_hint">TID（Hex，12 字节）</string>
-    <string name="write_note">TID 能不能写取决于标签：标准 Gen2 是出厂只读的，但这批标签实测可写。程序写完一律回读校验，写不进去会如实报告。</string>
+    <string name="write_note">写完一律回读校验。</string>
     <string name="raw_log">原始报文</string>
 
     <!-- 完整性校验 -->
@@ -94,17 +94,17 @@
 
     <!-- 主页 -->
     <string name="read_short">读标签</string>
-    <string name="write_pick">选择标签写入…</string>
-    <string name="write_pick_hint">从云端标签库里挑一颗，直接写进贴近天线的这颗标签。</string>
-    <string name="write_target">将写入：%1$s　后 5 位 %2$s</string>
-    <string name="write_target_none">还没选要写的标签</string>
+    <string name="write_pick">写入标签…</string>
+    <string name="write_pick_hint">挑一颗写进贴近天线的标签。</string>
+    <string name="write_target">将写入 %1$s（后 5 位 %2$s）</string>
+    <string name="write_target_none">还没挑标签</string>
     <string name="pick_title">挑一颗要写的标签</string>
     <string name="pick_filter_hint">按名称或后 5 位筛选</string>
     <string name="pick_empty">标签库是空的。先读一颗标签上传，或者到「标签库」页刷新。</string>
     <string name="pick_need_cache">补全数据还没拉回来 —— 到「标签库」页刷新一下。</string>
 
     <!-- 古法写入 -->
-    <string name="manual_hint">手动敲 EPC / TID 的十六进制值。边敲边按云端已有的标签补全（最后几位序号留给自己敲）。</string>
+    <string name="manual_hint">边敲边按云端已有的标签补全。</string>
     <string name="radio_section">读写器</string>
     <string name="cloud_section">云端</string>
     <string name="preview_cards">预览动画</string>
@@ -163,4 +163,6 @@
     <string name="cloud_row_msg">后 5 位 %1$s\n点「保存」改名，或点「删除」从库里删掉。</string>
     <string name="cloud_delete_title">确定删除？</string>
     <string name="cloud_write_msg">%1$s\nEPC: %2$s\n\n（同时写入它的 TID）</string>
+    <string name="write_now">写入</string>
+    <string name="pick_select">选这颗</string>
 </resources>
