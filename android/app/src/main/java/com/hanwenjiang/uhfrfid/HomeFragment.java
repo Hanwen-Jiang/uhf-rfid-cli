@@ -444,11 +444,33 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                     } catch (Exception ignored) {
                     }
                 }
+                final String epcHex = tag.epc;
+                final String tidHex = RfidFrame.hex(tid);
                 ui(() -> {
-                    setStatus(rep.ok ? getString(R.string.write_ok_short)
-                            : getString(R.string.write_fail_short));
+                    if (rep.ok) {
+                        // 面板刷成**刚写进去**的值。
+                        // 不用再读一次：writeEpcAndTid 每写一个区都回读校验过，
+                        // 这个值就是验证过的；再读一次只会多响一声蜂鸣器。
+                        s.lastEpc = epcHex;
+                        s.lastTid = tidHex;
+                        s.verdict = TagValidator.check(epcHex, tidHex);
+                        epcText.setText(epcHex);
+                        tidText.setText(tidHex);
+                        checkText.setText(s.verdict.complete
+                                ? getString(R.string.check_ok)
+                                : getString(R.string.check_bad,
+                                        s.verdict.detail == null ? s.verdict.reason
+                                                : s.verdict.detail));
+                        checkText.setTextColor(BORDER_OK);
+                        showWritten(tag);
+                        setStatus(getString(R.string.write_ok_target,
+                                displayName(tag), tag.suffix));
+                    } else {
+                        setStatus(getString(R.string.write_fail_short));
+                    }
                     // 成功：边框脉冲；失败：常红。都不缩放。
                     borderTo(rep.ok ? BORDER_OK : BORDER_BAD, true);
+                    updateUploadBtn();
                 });
             } catch (Exception e) {
                 ui(() -> {
@@ -496,6 +518,15 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
     static String fmtTime(String s) {
         if (s == null || s.length() < 16) return "-";
         return s.substring(5, 16);
+    }
+
+    /** 刚写完：显示名字 + "刚写入"，不显示云端的读到次数（那是旧数据）。 */
+    private void showWritten(CloudClient.Tag t) {
+        hitName.setText(displayName(t));
+        hitName.setTextColor(0xFF0D47A1);
+        hitSub.setText(getString(R.string.written_sub, t.suffix));
+        fadeIn(hitName);
+        fadeIn(hitSub);
     }
 
     private void showHit(CloudClient.Tag t, boolean justUploaded) {

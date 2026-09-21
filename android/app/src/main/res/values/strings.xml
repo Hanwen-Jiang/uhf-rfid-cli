@@ -166,4 +166,6 @@
     <string name="write_now">写入</string>
     <string name="pick_select">选择</string>
     <string name="write_now_target">写入 %1$s（%2$s）</string>
+    <string name="written_sub">后 5 位 %1$s　刚写入 ✓</string>
+    <string name="write_ok_target">写入成功：%1$s（%2$s）</string>
 </resources>
