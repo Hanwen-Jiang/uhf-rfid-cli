@@ -15,6 +15,9 @@ public final class Prefs {
 
     private static final String FILE = "uhf_rfid";
 
+    /** 默认 EPC 前缀：E 到 8B 那一段。 */
+    public static final String DEFAULT_EPC_PREFIX = "E28069150000502008B";
+
     private Prefs() {
     }
 
@@ -90,6 +93,19 @@ public final class Prefs {
 
     public static void setAutoUpload(Context c, boolean v) {
         sp(c).edit().putBoolean("auto_upload", v).apply();
+    }
+
+    /**
+     * EPC 的标准前缀（写标签时短输入会自动补上这一段）。
+     *
+     * <p>这批标签的 EPC 前 19 位固定，只有尾巴在变，所以贴标签时只敲尾巴就行。
+     */
+    public static String epcPrefix(Context c) {
+        return or(sp(c).getString("epc_prefix", ""), DEFAULT_EPC_PREFIX);
+    }
+
+    public static void setEpcPrefix(Context c, String v) {
+        sp(c).edit().putString("epc_prefix", v == null ? "" : v.trim().toUpperCase()).apply();
     }
 
     /** 天线口（1-4）。默认 1。 */

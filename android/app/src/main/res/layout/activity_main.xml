@@ -222,6 +222,17 @@
             android:inputType="textNoSuggestions"
             android:text="E28069152000402008B83072" />
 
+        <!-- 实际会写进去的值。短输入会自动补全前缀、TID 自动跟着 EPC 推出来，
+             所以把最终值明明白白显示出来，免得补错了还不知道。 -->
+        <TextView
+            android:id="@+id/writePreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:fontFamily="monospace"
+            android:textColor="#1565C0"
+            android:textSize="12sp" />
+
         <Button
             android:id="@+id/writeBtn"
             android:layout_width="match_parent"

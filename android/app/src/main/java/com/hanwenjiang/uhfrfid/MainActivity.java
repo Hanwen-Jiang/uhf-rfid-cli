@@ -61,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout hitCard, resultCard;
     private TextView hitLabel, hitName, hitSub, resultTitle, resultText;
     private Button readBtn, writeBtn;
+    private TextView writePreview;
     private MenuItem connectItem, scanItem;
     private EditText epcEdit, tidEdit;
 
@@ -120,6 +121,23 @@ public class MainActivity extends AppCompatActivity {
 
         epcEdit = findViewById(R.id.epcEdit);
         tidEdit = findViewById(R.id.tidEdit);
+        writePreview = findViewById(R.id.writePreview);
+
+        // 短输入自动补前缀；TID 自动跟着 EPC 推出来（第 9 位 0 -> 2）
+        epcEdit.addTextChangedListener(new android.text.TextWatcher() {
+            public void afterTextChanged(android.text.Editable s) { onEpcChanged(); }
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            public void onTextChanged(CharSequence s, int a, int b, int c) { }
+        });
+        tidEdit.addTextChangedListener(new android.text.TextWatcher() {
+            public void afterTextChanged(android.text.Editable s) {
+                if (!syncing) tidManual = true;   // 用户自己改过 TID，就别再自动覆盖
+                updateWritePreview();
+            }
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            public void onTextChanged(CharSequence s, int a, int b, int c) { }
+        });
+        updateWritePreview();
 
         // 连接后复位 / 关蜂鸣器 都挪到设置页了，这里不用再绑定控件
 
@@ -787,6 +805,16 @@ public class MainActivity extends AppCompatActivity {
         auto.setChecked(Prefs.autoUpload(this));
         box.addView(auto);
 
+        // EPC 前缀：写标签时短输入会自动补上这一段
+        TextView labelPre = new TextView(this);
+        labelPre.setText(R.string.epc_prefix_label);
+        labelPre.setTextSize(12);
+        box.addView(labelPre);
+        EditText prefix = new EditText(this);
+        prefix.setInputType(InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        prefix.setText(Prefs.epcPrefix(this));
+        box.addView(prefix);
+
         TextView tip = new TextView(this);
         tip.setText(R.string.settings_tip);
         tip.setTextSize(12);
@@ -801,8 +829,11 @@ public class MainActivity extends AppCompatActivity {
                     Prefs.setRestartOnConnect(this, restart.isChecked());
                     Prefs.setMuteBeep(this, mute.isChecked());
                     Prefs.setAutoUpload(this, auto.isChecked());
+                    Prefs.setEpcPrefix(this, prefix.getText().toString());
+                    updateWritePreview();
                     setStatus("设置已保存：天线 " + Prefs.antenna(this)
-                            + "  功率 " + Prefs.power(this));
+                            + "  功率 " + Prefs.power(this)
+                            + "\nEPC 前缀 " + Prefs.epcPrefix(this));
                 })
                 .setNeutralButton(R.string.cloud_open, (d, w) -> CloudActivity.open(this))
                 .setNegativeButton(android.R.string.cancel, null)
@@ -956,11 +987,72 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // ------------------------------------------------------------ 写入值的补全
+
+    /** 用户是不是自己动过 TID 输入框。动过就不再自动覆盖它。 */
+    private boolean tidManual;
+
+    /** 程序正在改输入框（避免自己的改动又触发监听器，绕成死循环）。 */
+    private boolean syncing;
+
+    /**
+     * EPC 补全：短输入当成"尾巴"，前面补上标准前缀。
+     *
+     * <p>这批标签的 EPC 前 19 位是固定的（默认 {@code E28069150000502008B}），
+     * 只有最后几位在变，所以贴标签时只敲那几位就够了。
+     *
+     * <p>规则很简单，而且界面上会实时显示补完的结果：
+     * <ul>
+     *   <li>够 24 位 → 当成完整 EPC，原样用（取前 24 位）</li>
+     *   <li>不够 24 位 → 当成尾巴，前缀 + 输入</li>
+     * </ul>
+     * 前缀可以在设置里改。
+     */
+    private String completeEpc(String raw) {
+        String s = raw == null ? "" : raw.replaceAll("[\\s:,-]", "").toUpperCase();
+        if (s.isEmpty()) return "";
+        if (!s.matches("[0-9A-F]+")) return s;   // 有非法字符就别乱补，交给 unhex 去报错
+        if (s.length() >= 24) return s.substring(0, 24);
+        return Prefs.epcPrefix(this) + s;
+    }
+
+    /**
+     * 由 EPC 推出 TID。
+     *
+     * <p>这批标签的 EPC 和 TID <b>只差第 9 个 hex 位</b>：EPC 是 {@code 0}、
+     * TID 是 {@code 2}，其余完全相同。所以写完 EPC 不必再手敲一遍 TID。
+     */
+    private String tidFromEpc(String epc) {
+        if (epc == null || epc.length() < 9) return "";
+        return epc.substring(0, 8) + "2" + epc.substring(9);
+    }
+
+    /** EPC 变了：重算 TID 并刷新预览。 */
+    private void onEpcChanged() {
+        if (syncing) return;
+        String epc = completeEpc(epcEdit.getText().toString());
+        if (!tidManual) {
+            syncing = true;
+            tidEdit.setText(tidFromEpc(epc));
+            syncing = false;
+        }
+        updateWritePreview();
+    }
+
+    /** 显示"实际会写进去的值"，补全补错了能一眼看见。 */
+    private void updateWritePreview() {
+        String epc = completeEpc(epcEdit.getText().toString());
+        String tid = completeEpc(tidEdit.getText().toString());
+        writePreview.setText(epc.isEmpty() && tid.isEmpty() ? ""
+                : "将写入\nEPC  " + epc + "\nTID  " + tid);
+    }
+
     // ------------------------------------------------------------ 写
 
     private void writeOnce() {
-        final String epcHex = epcEdit.getText().toString().trim();
-        final String tidHex = tidEdit.getText().toString().trim();
+        // 用补全后的值 —— 输入框里可能只有尾巴几位
+        final String epcHex = completeEpc(epcEdit.getText().toString());
+        final String tidHex = completeEpc(tidEdit.getText().toString());
         if (epcHex.isEmpty() && tidHex.isEmpty()) {
             setStatus("先在 EPC / TID 输入框里填要写的 Hex 值。");
             return;
