@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.Intent;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
@@ -41,6 +42,10 @@ import java.util.concurrent.Executors;
  */
 public class MainActivity extends AppCompatActivity {
 
+    /** 自动连接只试一次（用户主动断开后别再给他连上）。 */
+    private boolean autoTried;
+    private boolean attached;
+
     private static final String ACTION_USB_PERMISSION =
             "com.hanwenjiang.uhfrfid.USB_PERMISSION";
 
@@ -55,7 +60,8 @@ public class MainActivity extends AppCompatActivity {
     private Button uploadBtn, cloudBtn;
     private LinearLayout hitCard, resultCard;
     private TextView hitLabel, hitName, hitSub, resultTitle, resultText;
-    private Button connectBtn, readBtn, writeBtn;
+    private Button readBtn, writeBtn;
+    private MenuItem connectItem, scanItem;
     private EditText epcEdit, tidEdit;
 
     private final BroadcastReceiver permReceiver = new BroadcastReceiver() {
@@ -109,7 +115,6 @@ public class MainActivity extends AppCompatActivity {
         resultText = findViewById(R.id.resultText);
         logText.setMovementMethod(new ScrollingMovementMethod());
 
-        connectBtn = findViewById(R.id.connectBtn);
         readBtn = findViewById(R.id.readBtn);
         writeBtn = findViewById(R.id.writeBtn);
 
@@ -119,7 +124,6 @@ public class MainActivity extends AppCompatActivity {
         // 连接后复位 / 关蜂鸣器 都挪到设置页了，这里不用再绑定控件
 
 
-        connectBtn.setOnClickListener(v -> connectOrDisconnect());
         readBtn.setOnClickListener(v -> readOnce());
         writeBtn.setOnClickListener(v -> writeOnce());
         uploadBtn.setOnClickListener(v -> uploadCurrent());
@@ -131,13 +135,8 @@ public class MainActivity extends AppCompatActivity {
             return true;
         });
         cloudBtn.setOnClickListener(v -> CloudActivity.open(this));
-        findViewById(R.id.scanUsbBtn).setOnClickListener(
-                v -> setStatus(usbDiagnostics()));
-        // 长按 = 芯片寄存器探针（排查 CH34x 初始化失败用）
-        findViewById(R.id.scanUsbBtn).setOnLongClickListener(v -> {
-            setStatus(chipProbe());
-            return true;
-        });
+        // 「扫描」挪到顶栏菜单了（action_scan），对应的处理在 onOptionsItemSelected。
+        setupActionBar();
 
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
@@ -165,6 +164,62 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // 开屏（以及从后台回来）自动连 —— 正常流程里不用再点「连接」。
+        autoConnect();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // 插上读写器时系统会走到这里（清单里声明了 ATTACHED）。
+        // singleTop + 已注册的接收者，所以这里是"同一个界面收到通知"，不会重建。
+        if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) {
+            attached = true;
+            autoConnect();
+        }
+    }
+
+    /**
+     * 自动连接：能连就连，连不上就退回「点按钮」。
+     *
+     * <p>注意 Android 的 USB 权限<b>必须由用户点一次弹窗</b>，这是安全模型，
+     * 任何 App 都绕不过去。这里能做的是<b>把弹窗自动弹出来</b>，而不是等用户先点
+     * 「连接」。清单里声明了 USB 设备之后，系统弹窗会带「总是允许」的勾选框，
+     * 勾一次以后就不再问了。
+     *
+     * <p>只自动试一次：用户主动断开之后不该马上又给他连上。
+     */
+    private void autoConnect() {
+        if (session.isConnected() || autoTried) return;
+        autoTried = true;
+
+        java.util.List<com.hoho.android.usbserial.driver.UsbSerialDriver> drivers =
+                SerialTransport.listDrivers(usbManager);
+        if (drivers.isEmpty()) {
+            // 没插读写器 —— 什么都不做，别拿提示烦人
+            setStatus(getString(R.string.no_device_hint));
+            return;
+        }
+        boolean anyGranted = false;
+        for (com.hoho.android.usbserial.driver.UsbSerialDriver d : drivers) {
+            if (usbManager.hasPermission(d.getDevice())) anyGranted = true;
+        }
+        if (anyGranted) {
+            // 必须先把已授权的设备放进 granted —— doConnect() 是从这个集合里挑设备的，
+            // 不填的话它会说"还没有 USB 权限"（踩过：自动连接因此永远失败）
+            for (com.hoho.android.usbserial.driver.UsbSerialDriver d : drivers) {
+                if (usbManager.hasPermission(d.getDevice())) granted.add(d.getDevice());
+            }
+            doConnect();
+        } else {
+            // 自动弹权限窗（用户点「允许」，勾上"总是"以后就不再弹）
+            requestUsbPermission(drivers.get(0).getDevice());
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         session.listener = null;
@@ -182,7 +237,8 @@ public class MainActivity extends AppCompatActivity {
         boolean connected = session.isConnected();
         readBtn.setEnabled(connected);
         writeBtn.setEnabled(connected);
-        connectBtn.setText(connected ? R.string.disconnect : R.string.connect);
+        // 顶栏那个「连接/断开」的文字要跟着状态变
+        invalidateOptionsMenu();
         if (connected && session.transport != null) {
             setStatus("已连接 " + session.transport.describe());
         }
@@ -272,6 +328,7 @@ public class MainActivity extends AppCompatActivity {
     private void connectOrDisconnect() {
         if (session.isConnected()) {
             session.disconnect();
+            autoTried = false;      // 主动断开后，下次插拔/回前台可以再自动连
             session.lastStatus = "已断开。";
             reflectConnectionState();
             setStatus(session.lastStatus);
@@ -299,6 +356,17 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         UsbDevice dev = drivers.get(0).getDevice();
+        requestUsbPermission(dev);
+    }
+
+    /**
+     * 弹系统 USB 权限窗。
+     *
+     * <p>Android 的 USB 权限<b>必须由用户点一次</b>，这是安全模型，绕不过去；
+     * 能做的是把它自动弹出来，别让用户先点「连接」才弹。
+     * 清单里声明了 USB 设备之后，这个弹窗会带「总是允许」的勾选框 —— 勾一次就不再问。
+     */
+    private void requestUsbPermission(UsbDevice dev) {
         setStatus("请求 USB 权限：" + SerialTransport.describe(dev) + " …");
         // 这个 PendingIntent 必须是 MUTABLE：USB 权限对话框由系统弹出，系统会往
         // 这个 Intent 里补 EXTRA_DEVICE / EXTRA_PERMISSION_GRANTED；用 IMMUTABLE
@@ -606,18 +674,54 @@ public class MainActivity extends AppCompatActivity {
         uploadBtn.setEnabled(has);
     }
 
-    // ------------------------------------------------------------ 设置
+    // ------------------------------------------------------------ 顶栏 / 设置
+
+    /**
+     * 顶栏排布：<b>左上角设置，右上角连接 + 扫描</b>。
+     *
+     * <p>为什么设置挂在 home 图标上而不是做成菜单项：ActionBar 的菜单项只会往右边排，
+     * 想放左边就只能借用 home。
+     */
+    private void setupActionBar() {
+        androidx.appcompat.app.ActionBar bar = getSupportActionBar();
+        if (bar == null) return;
+        bar.setDisplayHomeAsUpEnabled(true);
+        bar.setHomeAsUpIndicator(R.drawable.ic_settings);
+    }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main, menu);
+        connectItem = menu.findItem(R.id.action_connect);
+        scanItem = menu.findItem(R.id.action_scan);
         return true;
     }
 
     @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        // 连接/断开的文字要随状态变，所以每次显示前刷一遍
+        if (connectItem != null) {
+            connectItem.setTitle(session.isConnected()
+                    ? R.string.disconnect : R.string.connect);
+        }
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.action_settings) {
+        int id = item.getItemId();
+        if (id == android.R.id.home) {
             showSettings();
+            return true;
+        }
+        if (id == R.id.action_connect) {
+            connectOrDisconnect();
+            return true;
+        }
+        if (id == R.id.action_scan) {
+            // 长按这个菜单项做不了，所以把「芯片寄存器探针」并进诊断输出里 —— 
+            // 反正它本来就是排查用的，一起打出来更省事。
+            setStatus(usbDiagnostics() + "\n\n" + chipProbe());
             return true;
         }
         return super.onOptionsItemSelected(item);

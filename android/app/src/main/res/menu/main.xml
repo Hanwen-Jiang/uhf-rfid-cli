@@ -2,9 +2,19 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- 放进溢出菜单（右上角三个点），不占主页空间 -->
+    <!--
+      右上角：连接/断开 + 扫描。
+      「设置」不在菜单里 —— 它挂在 ActionBar 左上角的 home 图标上
+      （菜单项在 ActionBar 里只会排到右边，想放左边就只能用 home）。
+    -->
     <item
-        android:id="@+id/action_settings"
-        android:title="@string/settings"
-        app:showAsAction="never" />
+        android:id="@+id/action_connect"
+        android:title="@string/connect"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_scan"
+        android:icon="@drawable/ic_scan"
+        android:title="@string/scan_usb_short"
+        app:showAsAction="always" />
 </menu>

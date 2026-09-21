@@ -17,9 +17,11 @@
           launchMode=singleTop + 完整的 configChanges：转屏、插拔 USB、切换深色模式
           等都不会重建 Activity，也就不会出现「用着用着 App 自己重启、连接掉了」。
 
-          另外**故意不加** USB_DEVICE_ATTACHED 的 intent-filter：加了之后每次插上
-          USB 设备系统就会再拉起一个实例，原来那个连接就废了 —— 这正是之前
-          「连接上又断开」的原因之一。现在插上设备后由用户点「连接」。
+          这里声明 USB_DEVICE_ATTACHED 是有意为之，而且是为了**少点一次**：
+          只有声明了具体的 USB 设备，系统那个权限弹窗才会带「总是允许」的勾选框，
+          勾一次以后就不再问。不声明的话每次插拔都要重新授权。
+          （早先不声明是因为每插一次系统会再拉起一个实例、把原连接顶掉；
+           现在连接状态在 RfidSession 单例里，加上 singleTop，重复拉起已经无害。）
         -->
         <activity
             android:name=".MainActivity"
@@ -31,6 +33,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <!-- 这个 meta-data 必须是 <activity> 的直接子元素，不能放进 intent-filter 里 -->
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
         </activity>
         <activity
             android:name=".CloudActivity"

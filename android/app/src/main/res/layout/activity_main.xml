@@ -40,12 +40,6 @@
             android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/connectBtn"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/connect" />
 
             <Button
                 android:id="@+id/readBtn"
@@ -56,11 +50,6 @@
                 android:text="@string/read" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/scanUsbBtn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/scan_usb" />
 
         <!-- 射频参数（天线口 / 功率）挪到设置页了，主页不放这两个输入框。
              当前值在「连接」按钮下面那行状态里能看到。 -->

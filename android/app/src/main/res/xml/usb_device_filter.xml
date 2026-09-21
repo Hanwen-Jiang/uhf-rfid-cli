@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  声明成"这个 App 认哪些 USB 设备"。
+
+  作用不只是自动拉起 App —— 更关键的是：**只有声明了设备，系统的 USB 权限弹窗
+  才会带「总是允许」的勾选框**，勾一次以后插拔都不再问。不声明的话每次都要重新授权。
+
+  当前只列了我们实际在用的 CH341A。以后换读写器，把新的 VID/PID 加进来即可：
+    <usb-device vendor-id="6790" product-id="21795" />   1A86:5523
+-->
+<resources>
+    <usb-device vendor-id="6790" product-id="21795" />
+</resources>
