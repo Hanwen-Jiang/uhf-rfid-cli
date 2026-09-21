@@ -133,40 +133,36 @@
                 app:icon="@drawable/ic_read"
                 app:iconGravity="textStart" />
 
-            <View
-                android:layout_width="1dp"
-                android:layout_height="24dp"
-                android:layout_gravity="end|center_vertical"
-                android:layout_marginEnd="56dp"
-                android:background="#66FFFFFF" />
-
-            <!-- 透明热区 = 上传到云端 -->
             <!--
-              热区必须有比按钮更高的 Z。
-              MaterialButton 默认带 2dp elevation，而 ViewGroup 从 API 21 起是
-              **按 Z 值**（不是 XML 顺序）分发触摸的 —— Z 低的控件就算写在后面、
-              画在上面，按钮仍然会把点击吃掉。踩过：按钮一从禁用变可用，
-              下拉就点不动了（禁用时不响应触摸，热区才拿得到）。
-              outlineProvider="none" 是为了提 Z 但不投影。
+              右侧热区 = 上传到云端。
+              分隔线和图标都放在<b>热区内部</b> —— 热区 Z 比按钮高，单独摆在外面的
+              分隔线/图标 Z 低，会被热区整个盖住，看不见（踩过）。
             -->
-            <View
+            <LinearLayout
                 android:id="@+id/uploadZone"
-                android:layout_width="56dp"
+                android:layout_width="60dp"
                 android:layout_height="match_parent"
                 android:layout_gravity="end"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:elevation="6dp"
                 android:focusable="false"
-                android:outlineProvider="none" />
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:outlineProvider="none">
 
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_gravity="end|center_vertical"
-                android:layout_marginEnd="16dp"
-                android:contentDescription="@string/cloud_upload"
-                android:src="@drawable/ic_upload" />
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="24dp"
+                    android:background="#66FFFFFF" />
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="17dp"
+                    android:contentDescription="@string/cloud_upload"
+                    android:src="@drawable/ic_upload" />
+            </LinearLayout>
         </FrameLayout>
 
         <!--
