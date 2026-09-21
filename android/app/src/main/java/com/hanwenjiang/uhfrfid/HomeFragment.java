@@ -1,5 +1,7 @@
 package com.hanwenjiang.uhfrfid;
 
+import android.animation.ArgbEvaluator;
+import android.animation.ValueAnimator;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,26 +15,33 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 主页：读标签（顺带自动上传）+ 写标签（从库里挑一颗直接写）。
+ * 主页：读标签（顺带自动上传）+ 从库里挑一颗写进去。
  *
- * <p>「读标签」和「上传到云端」并排放，因为自动上传有可能失败（网络、key 不对），
- * 那时候要能马上手点重传，而不是跑去别的页面找。
+ * <p>上半部分是一块<b>固定高度</b>的控制面板：状态、命中信息、EPC/TID、校验结果都在里面，
+ * 所以内容怎么变版面都不跳。反馈靠<b>边框动画</b> —— 不缩放，也就不会把周围挤开。
  */
 public class HomeFragment extends Fragment implements MainActivity.StatusHost {
 
-    private TextView statusText, epcText, tidText, checkText;
-    private TextView hitLabel, hitName, hitSub, writeTargetText;
-    private MaterialCardView hitCard;
-    private com.google.android.material.button.MaterialButton uploadBtn;
+    private static final int BORDER_IDLE = 0xFFB0BEC5;   // 灰：待机
+    private static final int BORDER_HIT = 0xFF1E88E5;    // 蓝：命中云端
+    private static final int BORDER_OK = 0xFF43A047;     // 绿：成功
+    private static final int BORDER_BAD = 0xFFE53935;    // 红：失败 / 不合格
+
+    private MaterialCardView panel;
+    private TextView statusText, epcText, tidText, checkText, hitName, hitSub;
+    private MaterialButton uploadBtn, writeBtn, pickWriteBtn;
 
     /** 用户挑好、准备写进去的那颗云端标签。 */
     private CloudClient.Tag target;
+    private ValueAnimator borderAnim;
+    private AlertDialog dialog;
 
     @Nullable
     @Override
@@ -42,28 +51,72 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
 
     @Override
     public void onViewCreated(@NonNull View v, @Nullable Bundle b) {
+        panel = v.findViewById(R.id.panel);
         statusText = v.findViewById(R.id.statusText);
         epcText = v.findViewById(R.id.epcText);
         tidText = v.findViewById(R.id.tidText);
         checkText = v.findViewById(R.id.checkText);
-        hitCard = v.findViewById(R.id.hitCard);
-        hitLabel = v.findViewById(R.id.hitLabel);
         hitName = v.findViewById(R.id.hitName);
         hitSub = v.findViewById(R.id.hitSub);
-        writeTargetText = v.findViewById(R.id.writeTargetText);
         uploadBtn = v.findViewById(R.id.uploadBtn);
+        writeBtn = v.findViewById(R.id.writeBtn);
+        pickWriteBtn = v.findViewById(R.id.pickWriteBtn);
 
         v.findViewById(R.id.readBtn).setOnClickListener(x -> readOnce(false));
         uploadBtn.setOnClickListener(x -> uploadCurrent());
-        // 写标签就这一个入口：点开挑一颗，确认后才动标签
-        v.findViewById(R.id.pickWriteBtn).setOnClickListener(x -> pickTag());
+        // 左边只挑（选中而已，不动标签）
+        pickWriteBtn.setOnClickListener(x -> pickTag());
+        // 右边才真写
+        writeBtn.setOnClickListener(x -> {
+            if (target == null) {
+                setStatus(getString(R.string.write_target_none));
+                return;
+            }
+            confirmWrite(target);
+        });
 
-        // 从上次读到的状态恢复（切页面回来时不该是空的）
-        epcText.setText(RfidSession.get().lastEpc);
-        tidText.setText(RfidSession.get().lastTid);
-        if (RfidSession.get().lastStatus != null) setStatus(RfidSession.get().lastStatus);
+        RfidSession s = RfidSession.get();
+        epcText.setText(s.lastEpc);
+        tidText.setText(s.lastTid);
+        if (s.lastStatus != null) setStatus(s.lastStatus);
         updateUploadBtn();
-        updateTargetText();
+        updatePickButton();
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (borderAnim != null) borderAnim.cancel();
+    }
+
+    // ------------------------------------------------------------ 反馈动画
+
+    /**
+     * 边框走一段颜色过渡。
+     *
+     * <p>刻意<b>不缩放</b>卡片：缩放会画到原尺寸之外，把上下挤开、还会和邻居重叠。
+     * 边框画在卡片里侧，怎么变都不影响布局。
+     */
+    private void borderTo(int color, boolean pulse) {
+        if (panel == null) return;
+        if (borderAnim != null) borderAnim.cancel();
+        if (!pulse) {
+            panel.setStrokeColor(color);
+            return;
+        }
+        borderAnim = ValueAnimator.ofObject(new ArgbEvaluator(),
+                BORDER_IDLE, color, BORDER_IDLE, color);
+        borderAnim.setDuration(900);
+        borderAnim.addUpdateListener(
+                a -> panel.setStrokeColor((int) a.getAnimatedValue()));
+        borderAnim.start();
+    }
+
+    /** 淡入。不放大 —— 放大会撑空间，这里只动透明度。 */
+    static void fadeIn(View view) {
+        view.setVisibility(View.VISIBLE);
+        view.setAlpha(0f);
+        view.animate().alpha(1f).setDuration(220).start();
     }
 
     // ------------------------------------------------------------ 读
@@ -89,6 +142,8 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                         epcText.setText(s.lastEpc);
                         tidText.setText(s.lastTid);
                         checkText.setText("");
+                        hideHit();
+                        borderTo(BORDER_IDLE, false);
                         setStatus(s.lastStatus);
                         updateUploadBtn();
                     });
@@ -105,14 +160,14 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                 final String shown = s.lastStatus;
 
                 ui(() -> {
-                    hideCards();
                     epcText.setText(epc);
                     tidText.setText(tid);
                     checkText.setText(verdict.complete
                             ? getString(R.string.check_ok)
                             : getString(R.string.check_bad,
                                     verdict.detail == null ? verdict.reason : verdict.detail));
-                    checkText.setTextColor(verdict.complete ? 0xFF1B5E20 : 0xFFB71C1C);
+                    checkText.setTextColor(verdict.complete ? BORDER_OK : BORDER_BAD);
+                    borderTo(verdict.complete ? BORDER_OK : BORDER_BAD, true);
                     setStatus(shown);
                     updateUploadBtn();
                 });
@@ -139,13 +194,15 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                     return;
                 }
 
-                // 合格 + 开了自动上传 -> 直接传；否则等用户点「上传到云端」
                 if (!forUpload && Prefs.autoUpload(requireContext())) {
                     doUpload();
                 }
             } catch (Exception e) {
-                final String why = e.getMessage() == null ? e.toString() : e.getMessage();
-                ui(() -> setStatus(getString(R.string.query_failed, why)));
+                final String why = msg(e);
+                ui(() -> {
+                    borderTo(BORDER_BAD, false);
+                    setStatus(getString(R.string.query_failed, why));
+                });
             }
         });
     }
@@ -169,8 +226,7 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         final RfidSession s = RfidSession.get();
         final String epc = s.lastEpc;
         final String tid = s.lastTid;
-        final String note = s.forceAnomaly
-                ? getString(R.string.anomaly_note) : null;
+        final String note = s.forceAnomaly ? getString(R.string.anomaly_note) : null;
         s.forceAnomaly = false;
 
         ui(() -> setStatus(getString(R.string.cloud_checking)));
@@ -187,7 +243,7 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                                         hit.seenCount, fmtTime(hit.lastSeen))
                                 : getString(R.string.cloud_hit, hit.name, hit.suffix,
                                         hit.seenCount, fmtTime(hit.lastSeen)));
-                        showHitCard(hit, false);
+                        showHit(hit, false);
                         if (hit.name == null || hit.name.isEmpty()) askName(hit);
                     });
                     return;
@@ -199,18 +255,20 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                     setStatus(note == null
                             ? getString(R.string.cloud_upload_ok, epc)
                             : getString(R.string.cloud_upload_anomaly, epc));
-                    if (res.tag != null) showHitCard(res.tag, true);
+                    if (res.tag != null) showHit(res.tag, true);
                     askName(res.tag);
+                    updatePickButton();
                 });
-                // 刚传上去的立刻能作为补全数据
                 try {
                     TagCache.put(client.list(false));
                 } catch (Exception ignored) {
                 }
             } catch (Exception e) {
-                final String why = e.getMessage() == null ? e.toString() : e.getMessage();
-                // 自动上传失败时，用户手点「上传到云端」就能重来
-                ui(() -> setStatus(getString(R.string.cloud_error, why)));
+                final String why = msg(e);
+                ui(() -> {
+                    borderTo(BORDER_BAD, false);
+                    setStatus(getString(R.string.cloud_error, why));
+                });
             }
         });
     }
@@ -227,7 +285,6 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
 
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.cloud_name_title)
-                .setMessage(getString(R.string.cloud_name_msg, tag.epc, tag.suffix))
                 .setView(box)
                 .setPositiveButton(R.string.cloud_save, (d, w) -> {
                     String name = input.getText().toString().trim();
@@ -249,11 +306,10 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                 .show();
     }
 
-    // ------------------------------------------------------------ 写（从库里挑）
+    // ------------------------------------------------------------ 挑标签
 
     private void pickTag() {
         if (TagCache.size() == 0) {
-            // 缓存空的时候现拉一次，别让用户白跑一趟
             setStatus(getString(R.string.cloud_checking));
             Bg.run(() -> {
                 try {
@@ -283,9 +339,8 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         TextView empty = view.findViewById(R.id.emptyText);
 
         List<CloudClient.Tag> shown = new ArrayList<>(all);
-        // 弹窗里那行按钮写「选择」—— 挑的时候只选中，不动标签
         TagRowAdapter adapter = new TagRowAdapter(requireContext(), shown,
-                tag -> selectTag(tag), R.string.pick_select);
+                this::selectTag, R.string.pick_select);
         list.setAdapter(adapter);
 
         filter.addTextChangedListener(new android.text.TextWatcher() {
@@ -320,28 +375,32 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         dialog.show();
     }
 
-    private AlertDialog dialog;
-
-    // ------------------------------------------------------------ 写
-
-    /**
-     * 在弹窗里挑一颗：记下来、关掉弹窗，然后弹确认框。
-     *
-     * <p>弹窗里那行的按钮写「选这颗」而不是「写入」—— 挑的动作要说清楚是"挑"，
-     * 真正动标签的是后面那个确认框。
-     */
+    /** 挑一颗：只记下来，不动标签。 */
     private void selectTag(CloudClient.Tag tag) {
         target = tag;
-        updateTargetText();
         if (dialog != null) dialog.dismiss();
-        confirmWrite(tag);
+        updatePickButton();
+        setStatus(getString(R.string.write_target, displayName(tag), tag.suffix));
+        borderTo(BORDER_HIT, false);
     }
 
     private static String displayName(CloudClient.Tag t) {
         return t.name == null || t.name.isEmpty() ? "(未命名)" : t.name;
     }
 
-    /** 按「写入」之后确认一次，然后才动标签。 */
+    /** 挑好的那颗直接写在按钮上，不用另外占一行。 */
+    private void updatePickButton() {
+        if (pickWriteBtn == null) return;
+        // 选中的信息显示在「写入」主按钮上；右半边只是下拉三角，不显示文字
+        writeBtn.setText(target == null
+                ? getString(R.string.write_now)
+                : getString(R.string.write_now_target,
+                        displayName(target), target.suffix));
+        if (writeBtn != null) writeBtn.setEnabled(target != null);
+    }
+
+    // ------------------------------------------------------------ 写
+
     private void confirmWrite(CloudClient.Tag tag) {
         if (!RfidSession.get().isConnected()) {
             setStatus(getString(R.string.need_connect_first));
@@ -362,12 +421,10 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
             try {
                 RfidSession s = RfidSession.get();
                 byte[] epc = RfidFrame.unhex(tag.epc);
-                byte[] tid = RfidFrame.unhex(
-                        tag.tid == null || tag.tid.isEmpty()
-                                ? TagWrite.tidFromEpc(tag.epc) : tag.tid);
+                byte[] tid = RfidFrame.unhex(tag.tid == null || tag.tid.isEmpty()
+                        ? TagWrite.tidFromEpc(tag.epc) : tag.tid);
                 RfidReader.WriteReport rep = s.reader.writeEpcAndTid(epc, 2, tid, 0);
                 if (rep.ok) {
-                    // 两个区都写成功才向云端记一次
                     try {
                         Prefs.client(requireContext()).markWritten(tag.epc);
                     } catch (Exception ignored) {
@@ -376,51 +433,41 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                 ui(() -> {
                     setStatus(rep.ok ? getString(R.string.write_ok_short)
                             : getString(R.string.write_fail_short));
-                    showWriteResult(rep.ok, rep.text);
+                    // 成功：边框脉冲；失败：常红。都不缩放。
+                    borderTo(rep.ok ? BORDER_OK : BORDER_BAD, true);
                 });
             } catch (Exception e) {
-                ui(() -> setStatus(getString(R.string.write_failed, msg(e))));
+                ui(() -> {
+                    borderTo(BORDER_BAD, false);
+                    setStatus(getString(R.string.write_failed, msg(e)));
+                });
             }
         });
     }
 
-    private void updateTargetText() {
-        if (writeTargetText == null) return;
-        // 没挑过就整行不显示 —— 空着比写一句"还没挑标签"安静
-        if (target == null) {
-            writeTargetText.setVisibility(View.GONE);
-        } else {
-            writeTargetText.setVisibility(View.VISIBLE);
-            writeTargetText.setText(getString(R.string.write_target,
-                    displayName(target), target.suffix));
-        }
-
-    }
-
-    // ------------------------------------------------------------ 卡片和提示
+    // ------------------------------------------------------------ 杂项
 
     private void ui(Runnable r) {
         if (isAdded()) requireActivity().runOnUiThread(r);
+    }
+
+    @Override
+    public void showStatus(String s) {
+        if (statusText != null && s != null) statusText.setText(s);
     }
 
     private void setStatus(String s) {
         showStatus(s);
     }
 
-    /** 宿主（连接状态之类）也会往这一页推状态文字。 */
-    @Override
-    public void showStatus(String s) {
-        if (statusText != null && s != null) statusText.setText(s);
+    private void hideHit() {
+        hitName.setVisibility(View.GONE);
+        hitSub.setVisibility(View.GONE);
     }
 
     private void updateUploadBtn() {
         RfidSession s = RfidSession.get();
-        boolean has = s.lastEpc != null && !s.lastEpc.startsWith("—");
-        uploadBtn.setEnabled(has);
-    }
-
-    private void hideCards() {
-        hitCard.setVisibility(View.GONE);
+        uploadBtn.setEnabled(s.lastEpc != null && !s.lastEpc.startsWith("—"));
     }
 
     static String msg(Exception e) {
@@ -432,10 +479,8 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         return s.substring(5, 16);
     }
 
-    private void showHitCard(CloudClient.Tag t, boolean justUploaded) {
+    private void showHit(CloudClient.Tag t, boolean justUploaded) {
         boolean unnamed = t.name == null || t.name.isEmpty();
-        hitLabel.setText(justUploaded ? R.string.hit_label_new
-                : (unnamed ? R.string.hit_label_unnamed : R.string.hit_label));
         hitName.setText(unnamed ? getString(R.string.cloud_unnamed) : t.name);
         hitName.setTextColor(unnamed ? 0xFFB26A00 : 0xFF0D47A1);
 
@@ -443,32 +488,10 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
                 t.suffix, t.seenCount, fmtTime(t.lastSeen)));
         if (t.writeCount > 0) {
             sb.append("　写过 ").append(t.writeCount).append(" 次");
-            if (t.lastWritten != null && t.lastWritten.length() >= 16) {
-                sb.append("（最后 ").append(fmtTime(t.lastWritten)).append("）");
-            }
         }
         hitSub.setText(sb.toString());
-        hitCard.setCardBackgroundColor(justUploaded ? 0xFFFFF8E1 : 0xFFE3F2FD);
-        hitCard.setStrokeColor(justUploaded ? 0xFFF9A825 : 0xFF1E88E5);
-        popIn(hitCard);
-    }
-
-    /** 写入结果：成功绿卡 + 强调动画，失败红卡。 */
-    private void showWriteResult(boolean ok, String report) {
-        hitCard.setVisibility(View.GONE);
-        // 结果直接放进状态区，这里只保留"弹一下"的效果提示
-        statusText.setTextColor(ok ? 0xFF1B5E20 : 0xFFB71C1C);
-        popIn(statusText);
-    }
-
-    static void popIn(View card) {
-        card.setVisibility(View.VISIBLE);
-        card.setAlpha(0f);
-        card.setScaleX(0.88f);
-        card.setScaleY(0.88f);
-        card.animate().alpha(1f).scaleX(1.04f).scaleY(1.04f).setDuration(200)
-                .withEndAction(() -> card.animate().scaleX(1f).scaleY(1f)
-                        .setDuration(120).start())
-                .start();
+        fadeIn(hitName);
+        fadeIn(hitSub);
+        borderTo(justUploaded ? BORDER_OK : BORDER_HIT, justUploaded);
     }
 }

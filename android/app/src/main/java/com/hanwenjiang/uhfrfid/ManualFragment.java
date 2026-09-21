@@ -182,7 +182,7 @@ public class ManualFragment extends Fragment implements MainActivity.StatusHost 
                             : getString(R.string.write_fail_short));
                     statusText.append("\n" + rep.text);
                     logText.setText(raw);
-                    HomeFragment.popIn(statusText);
+                    HomeFragment.fadeIn(statusText);
                 });
             } catch (IllegalArgumentException e) {
                 ui(() -> statusText.setText(getString(R.string.manual_bad_hex, e.getMessage())));

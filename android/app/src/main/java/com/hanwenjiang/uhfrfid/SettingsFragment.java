@@ -91,7 +91,7 @@ public class SettingsFragment extends Fragment {
         Prefs.setAutoUpload(requireContext(), autoCheck.isChecked());
         statusText.setText(getString(R.string.settings_saved,
                 Prefs.antenna(requireContext()), Prefs.power(requireContext())));
-        HomeFragment.popIn(statusText);
+        HomeFragment.fadeIn(statusText);
         // 配置可能变了，顺手把补全数据重拉一次
         Bg.run(() -> {
             try {
@@ -124,12 +124,12 @@ public class SettingsFragment extends Fragment {
      */
     private void previewCards() {
         statusText.setText(R.string.preview_running);
-        HomeFragment.popIn(statusText);
+        HomeFragment.fadeIn(statusText);
         statusText.postDelayed(() -> {
             if (!isAdded()) return;
             statusText.setText(R.string.preview_done);
             statusText.setTextColor(0xFF1B5E20);
-            HomeFragment.popIn(statusText);
+            HomeFragment.fadeIn(statusText);
         }, 900);
     }
 

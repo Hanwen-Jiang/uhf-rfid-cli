@@ -94,7 +94,7 @@
 
     <!-- 主页 -->
     <string name="read_short">读标签</string>
-    <string name="write_pick">写入标签…</string>
+    <string name="write_pick">选择标签…</string>
     <string name="write_pick_hint">挑一颗写进贴近天线的标签。</string>
     <string name="write_target">将写入 %1$s（后 5 位 %2$s）</string>
     <string name="write_target_none">还没挑标签</string>
@@ -164,5 +164,6 @@
     <string name="cloud_delete_title">确定删除？</string>
     <string name="cloud_write_msg">%1$s\nEPC: %2$s\n\n（同时写入它的 TID）</string>
     <string name="write_now">写入</string>
-    <string name="pick_select">选这颗</string>
+    <string name="pick_select">选择</string>
+    <string name="write_now_target">写入 %1$s（%2$s）</string>
 </resources>
