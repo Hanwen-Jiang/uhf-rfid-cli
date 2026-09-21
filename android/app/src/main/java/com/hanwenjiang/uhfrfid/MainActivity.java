@@ -135,7 +135,7 @@ public class MainActivity extends AppCompatActivity {
                 // 用户自己改了 TID：也给它补全，但之后不再由 EPC 自动覆盖
                 tidManual = true;
                 String typed = tidEdit.getText().toString();
-                String done = completeEpc(typed);
+                String done = completeTid(typed);
                 if (!done.equals(typed)) {
                     syncing = true;
                     tidEdit.setText(done);
@@ -1008,12 +1008,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean syncing;
 
     /**
-     * EPC 补全：短输入当成"尾巴"，前面补上标准前缀。
+     * 按给定前缀补全一个 hex 值。
      *
-     * <p>这批标签的 EPC 前 19 位是固定的（默认 {@code E28069150000502008B}），
-     * 只有最后几位在变，所以贴标签时只敲那几位就够了。
-     *
-     * <p>补全是<b>边输边补</b>的，光标停在末尾 —— 因为前缀补在<b>前面</b>、尾巴在
+     * <p>补全是<b>边输边补</b>的，光标停在末尾 —— 前缀补在<b>前面</b>、尾巴在
      * <b>后面</b>，所以继续往下敲会正确地接在尾巴后面，不会错位。
      *
      * <p>但"无脑加前缀"会出事：补完之后用户一退格，长度就不足 24 了，再加一次前缀
@@ -1027,16 +1024,33 @@ public class MainActivity extends AppCompatActivity {
      *   <li>其余 → 前缀 + 输入</li>
      * </ol>
      */
-    private String completeEpc(String raw) {
-        String s = raw == null ? "" : raw.replaceAll("[\\s:,-]", "").toUpperCase();
-        if (s.isEmpty()) return "";
-        if (!s.matches("[0-9A-F]+")) return s;
 
-        String prefix = Prefs.epcPrefix(this);
-        if (s.startsWith(prefix)) return s.length() > 24 ? s.substring(0, 24) : s;
-        if (prefix.startsWith(s)) return s;          // 正在删前缀，放行
-        if (s.length() >= 24) return s.substring(0, 24);
-        return prefix + s;
+
+    /**
+     * EPC 的补全前缀。默认 {@code E28069150000502008B}（第 9 位是 0）。
+     */
+    private String epcPrefix() {
+        return Prefs.epcPrefix(this);
+    }
+
+    /**
+     * TID 的补全前缀 —— 和 EPC 只差第 9 位（{@code 2}）。
+     *
+     * <p><b>必须分开算。</b>踩过的坑：以前两个框共用一个补全函数，TID 因为第 9 位是
+     * {@code 2}、不匹配 EPC 前缀，就被当成"短输入"又补了一遍前缀，
+     * 于是少一位时预览和实际写入都变成
+     * {@code E28069150000502008BE28069152000502008B3A45} 这种垃圾。
+     */
+    private String tidPrefix() {
+        return TagWrite.tidPrefix(epcPrefix());
+    }
+
+    private String completeEpc(String raw) {
+        return TagWrite.complete(raw, epcPrefix());
+    }
+
+    private String completeTid(String raw) {
+        return TagWrite.complete(raw, tidPrefix());
     }
 
     /**
@@ -1045,10 +1059,7 @@ public class MainActivity extends AppCompatActivity {
      * <p>这批标签的 EPC 和 TID <b>只差第 9 个 hex 位</b>：EPC 是 {@code 0}、
      * TID 是 {@code 2}，其余完全相同。所以写完 EPC 不必再手敲一遍 TID。
      */
-    private String tidFromEpc(String epc) {
-        if (epc == null || epc.length() < 9) return "";
-        return epc.substring(0, 8) + "2" + epc.substring(9);
-    }
+
 
     /** EPC 变了：把补全结果写回输入框，重算 TID，刷新预览。 */
     private void onEpcChanged() {
@@ -1067,7 +1078,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (!tidManual) {
             syncing = true;
-            String tid = tidFromEpc(done);
+            String tid = TagWrite.tidFromEpc(done);
             tidEdit.setText(tid);
             if (tid.length() > 0) tidEdit.setSelection(tid.length());
             syncing = false;
@@ -1078,9 +1089,16 @@ public class MainActivity extends AppCompatActivity {
     /** 显示"实际会写进去的值"，补全补错了能一眼看见。 */
     private void updateWritePreview() {
         String epc = completeEpc(epcEdit.getText().toString());
-        String tid = completeEpc(tidEdit.getText().toString());
+        // TID 用 TID 自己的前缀 —— 它第 9 位是 2，和 EPC 不共用前缀
+        String tid = completeTid(tidEdit.getText().toString());
+        // 再核一遍：两边的"尾巴"必须一致，不一致就是补错了，直接标出来
+        String tailWarn = "";
+        if (epc.length() == 24 && tid.length() == 24
+                && !epc.substring(9).equals(tid.substring(9))) {
+            tailWarn = "\n⚠ EPC 和 TID 的后 15 位不一致，写完这颗标签会被判「不合格」";
+        }
         writePreview.setText(epc.isEmpty() && tid.isEmpty() ? ""
-                : "将写入\nEPC  " + epc + "\nTID  " + tid);
+                : "将写入\nEPC  " + epc + "\nTID  " + tid + tailWarn);
     }
 
     // ------------------------------------------------------------ 写
@@ -1088,7 +1106,7 @@ public class MainActivity extends AppCompatActivity {
     private void writeOnce() {
         // 用补全后的值 —— 输入框里可能只有尾巴几位
         final String epcHex = completeEpc(epcEdit.getText().toString());
-        final String tidHex = completeEpc(tidEdit.getText().toString());
+        final String tidHex = completeTid(tidEdit.getText().toString());
         if (epcHex.isEmpty() && tidHex.isEmpty()) {
             setStatus("先在 EPC / TID 输入框里填要写的 Hex 值。");
             return;
