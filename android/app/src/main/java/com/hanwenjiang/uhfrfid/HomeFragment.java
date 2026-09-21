@@ -36,7 +36,7 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
 
     private MaterialCardView panel;
     private TextView statusText, epcText, tidText, checkText, hitName, hitSub;
-    private MaterialButton uploadBtn, writeBtn;
+    private MaterialButton readBtn, writeBtn;
 
     /** 用户挑好、准备写进去的那颗云端标签。 */
     private CloudClient.Tag target;
@@ -58,10 +58,11 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         checkText = v.findViewById(R.id.checkText);
         hitName = v.findViewById(R.id.hitName);
         hitSub = v.findViewById(R.id.hitSub);
-        uploadBtn = v.findViewById(R.id.uploadBtn);
+        readBtn = v.findViewById(R.id.readBtn);
         writeBtn = v.findViewById(R.id.writeBtn);
-        v.findViewById(R.id.readBtn).setOnClickListener(x -> readOnce(false));
-        uploadBtn.setOnClickListener(x -> uploadCurrent());
+        readBtn.setOnClickListener(x -> readOnce(false));
+        // 按钮主体 = 读；右边那条透明热区 = 上传到云端
+        v.findViewById(R.id.uploadZone).setOnClickListener(x -> uploadCurrent());
         // 按钮主体 = 写；右边那条透明热区 = 下拉挑标签
         v.findViewById(R.id.dropZone).setOnClickListener(x -> pickTag());
         writeBtn.setOnClickListener(x -> {
@@ -78,6 +79,18 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         if (s.lastStatus != null) setStatus(s.lastStatus);
         updateUploadBtn();
         updatePickButton();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        updateUploadBtn();
+    }
+
+    /** 连接是异步完成的，连上之后要把按钮从灰态放出来。 */
+    @Override
+    public void onConnectionChanged() {
+        updateUploadBtn();
     }
 
     @Override
@@ -466,9 +479,14 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         hitSub.setVisibility(View.GONE);
     }
 
+    /**
+     * 读按钮的可用状态跟着连接走。
+     *
+     * <p>上传热区<b>一直可点</b> —— 没连上或没读过时 uploadCurrent() 会自己给说明，
+     * 比让热区静默失效好（热区本来就看不出来，禁用与否用户也无从判断）。
+     */
     private void updateUploadBtn() {
-        RfidSession s = RfidSession.get();
-        uploadBtn.setEnabled(s.lastEpc != null && !s.lastEpc.startsWith("—"));
+        readBtn.setEnabled(RfidSession.get().isConnected());
     }
 
     static String msg(Exception e) {

@@ -166,6 +166,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void reflectConnectionState() {
         invalidateOptionsMenu();
+        Fragment f = getSupportFragmentManager().findFragmentById(R.id.content);
+        if (f instanceof StatusHost) ((StatusHost) f).onConnectionChanged();
     }
 
     /**
@@ -187,6 +189,15 @@ public class MainActivity extends AppCompatActivity {
     /** 页面想接收宿主的状态文字就实现它。 */
     public interface StatusHost {
         void showStatus(String s);
+
+        /**
+         * 读写器的连接状态变了。
+         *
+         * <p>页面里的按钮可用性是跟着"连没连上"走的，而连接是异步完成的 ——
+         * 只在 onViewCreated 里算一次的话，按钮会一直停在"没连上"的灰态。
+         */
+        default void onConnectionChanged() {
+        }
     }
 
     // ------------------------------------------------------------ 连接
