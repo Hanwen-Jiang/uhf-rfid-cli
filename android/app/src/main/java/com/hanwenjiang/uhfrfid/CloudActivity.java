@@ -79,7 +79,15 @@ public class CloudActivity extends AppCompatActivity {
         final boolean unnamed = onlyUnnamed.isChecked();
         worker.execute(() -> {
             try {
-                List<CloudClient.Tag> got = Prefs.client(this).list(unnamed);
+                CloudClient client = Prefs.client(this);
+                List<CloudClient.Tag> got = client.list(unnamed);
+                // 时机 3：打开云端标签库后，把写标签补全用的缓存一并刷新。
+                // 列表可能只筛了"没命名的"，所以缓存要单独拉一次全量。
+                try {
+                    TagCache.put(unnamed ? client.list(false) : got);
+                } catch (Exception e) {
+                    TagCache.putError(msg(e));
+                }
                 ui.post(() -> {
                     tags.clear();
                     tags.addAll(got);

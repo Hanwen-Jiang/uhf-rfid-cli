@@ -135,12 +135,15 @@ public class MainActivity extends AppCompatActivity {
                 // 用户自己改了 TID：也给它补全，但之后不再由 EPC 自动覆盖
                 tidManual = true;
                 String typed = tidEdit.getText().toString();
-                String done = completeTid(typed);
+                boolean grew = typed.length() > lastTidText.length();
+                lastTidText = typed;
+                String done = completeTid(typed, grew);
                 if (!done.equals(typed)) {
                     syncing = true;
                     tidEdit.setText(done);
                     tidEdit.setSelection(done.length());
                     syncing = false;
+                    lastTidText = done;
                 }
                 updateWritePreview();
             }
@@ -165,6 +168,8 @@ public class MainActivity extends AppCompatActivity {
         cloudBtn.setOnClickListener(v -> CloudActivity.open(this));
         // 「扫描」挪到顶栏菜单了（action_scan），对应的处理在 onOptionsItemSelected。
         setupActionBar();
+
+        refreshTagCache();       // 时机 1：打开 App 就把补全数据拉到内存
 
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
@@ -656,6 +661,7 @@ public class MainActivity extends AppCompatActivity {
                             : getString(R.string.cloud_upload_anomaly, shown));
                     askName(r.tag);
                     if (r.tag != null) showHitCard(r.tag, true);
+                    refreshTagCache();   // 时机 2：刚上传的立刻能补出来
                     updateCloudButtons();
                 });
             } catch (Exception e) {
@@ -817,15 +823,6 @@ public class MainActivity extends AppCompatActivity {
         auto.setChecked(Prefs.autoUpload(this));
         box.addView(auto);
 
-        // EPC 前缀：写标签时短输入会自动补上这一段
-        TextView labelPre = new TextView(this);
-        labelPre.setText(R.string.epc_prefix_label);
-        labelPre.setTextSize(12);
-        box.addView(labelPre);
-        EditText prefix = new EditText(this);
-        prefix.setInputType(InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        prefix.setText(Prefs.epcPrefix(this));
-        box.addView(prefix);
 
         TextView tip = new TextView(this);
         tip.setText(R.string.settings_tip);
@@ -841,15 +838,32 @@ public class MainActivity extends AppCompatActivity {
                     Prefs.setRestartOnConnect(this, restart.isChecked());
                     Prefs.setMuteBeep(this, mute.isChecked());
                     Prefs.setAutoUpload(this, auto.isChecked());
-                    Prefs.setEpcPrefix(this, prefix.getText().toString());
                     updateWritePreview();
                     setStatus("设置已保存：天线 " + Prefs.antenna(this)
                             + "  功率 " + Prefs.power(this)
-                            + "\nEPC 前缀 " + Prefs.epcPrefix(this));
+                            + "\n补全数据 " + TagCache.size() + " 条");
                 })
                 .setNeutralButton(R.string.cloud_open, (d, w) -> CloudActivity.open(this))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    /**
+     * 刷新补全用的内存缓存。
+     *
+     * <p>只在三个时机调用（补全本身<b>绝不查网络</b>）：
+     * 打开 App、读完标签上传之后、打开云端标签库之后。
+     */
+    private void refreshTagCache() {
+        if (!Prefs.isConfigured(this)) return;
+        worker.execute(() -> {
+            try {
+                TagCache.put(Prefs.client(this).list(false));
+            } catch (Exception e) {
+                // 拉不到就继续用旧的 —— 补全少一点而已，不该打断任何操作
+                TagCache.putError(e.getMessage());
+            }
+        });
     }
 
     /** 云端给的是 UTC 的 {@code YYYY-MM-DD HH:MM:SS}，显示到分钟就够。 */
@@ -1007,6 +1021,10 @@ public class MainActivity extends AppCompatActivity {
     /** 程序正在改输入框（避免自己的改动又触发监听器，绕成死循环）。 */
     private boolean syncing;
 
+    /** 上一次的文本，用来判断这次改动是不是"越打越长"。 */
+    private String lastEpcText = "";
+    private String lastTidText = "";
+
     /**
      * 按给定前缀补全一个 hex 值。
      *
@@ -1027,53 +1045,34 @@ public class MainActivity extends AppCompatActivity {
 
 
     /**
-     * EPC 的补全前缀。默认 {@code E28069150000502008B}（第 9 位是 0）。
-     */
-    private String epcPrefix() {
-        return Prefs.epcPrefix(this);
-    }
-
-    /**
-     * TID 的补全前缀 —— 和 EPC 只差第 9 位（{@code 2}）。
+     * 补全数据从内存缓存里来（{@link TagCache}），<b>不查网络</b>。
      *
-     * <p><b>必须分开算。</b>踩过的坑：以前两个框共用一个补全函数，TID 因为第 9 位是
-     * {@code 2}、不匹配 EPC 前缀，就被当成"短输入"又补了一遍前缀，
-     * 于是少一位时预览和实际写入都变成
-     * {@code E28069150000502008BE28069152000502008B3A45} 这种垃圾。
+     * <p>缓存只在三个时机刷新：打开 App、读完标签上传之后、打开云端标签库之后。
      */
-    private String tidPrefix() {
-        return TagWrite.tidPrefix(epcPrefix());
+    private String completeEpc(String raw, boolean grew) {
+        return TagWrite.completeFrom(raw, TagCache.epcs(), grew);
     }
 
-    private String completeEpc(String raw) {
-        return TagWrite.complete(raw, epcPrefix());
+    private String completeTid(String raw, boolean grew) {
+        return TagWrite.completeFrom(raw, TagCache.tids(), grew);
     }
 
-    private String completeTid(String raw) {
-        return TagWrite.complete(raw, tidPrefix());
-    }
-
-    /**
-     * 由 EPC 推出 TID。
-     *
-     * <p>这批标签的 EPC 和 TID <b>只差第 9 个 hex 位</b>：EPC 是 {@code 0}、
-     * TID 是 {@code 2}，其余完全相同。所以写完 EPC 不必再手敲一遍 TID。
-     */
-
-
-    /** EPC 变了：把补全结果写回输入框，重算 TID，刷新预览。 */
+    /** EPC 变了：把补全结果写回输入框，重算 TID，刷新警告。 */
     private void onEpcChanged() {
         if (syncing) return;
         String typed = epcEdit.getText().toString();
-        String done = completeEpc(typed);
+        // 只在"越打越长"时补。否则用户一退格就被补回来，输入框会变得删不掉。
+        boolean grew = typed.length() > lastEpcText.length();
+        lastEpcText = typed;
+        String done = completeEpc(typed, grew);
 
-        // 把补全结果直接写进输入框（用户要的就是"框里自动补全"），
-        // 光标挪到末尾 —— 继续敲会正确接在尾巴后面。
+        // 补全结果直接写回输入框（用户要的就是"框里自动补全"），光标挪到末尾
         if (!done.equals(typed)) {
             syncing = true;
             epcEdit.setText(done);
             epcEdit.setSelection(done.length());
             syncing = false;
+            lastEpcText = done;
         }
 
         if (!tidManual) {
@@ -1082,6 +1081,7 @@ public class MainActivity extends AppCompatActivity {
             tidEdit.setText(tid);
             if (tid.length() > 0) tidEdit.setSelection(tid.length());
             syncing = false;
+            lastTidText = tid;
         }
         updateWritePreview();
     }
@@ -1094,8 +1094,8 @@ public class MainActivity extends AppCompatActivity {
      * 后者要紧 —— 只写进去一个区会让标签不配对，之后每次读数都会被判「不合格」。
      */
     private void updateWritePreview() {
-        String epc = completeEpc(epcEdit.getText().toString());
-        String tid = completeTid(tidEdit.getText().toString());
+        String epc = completeEpc(epcEdit.getText().toString(), false);
+        String tid = completeTid(tidEdit.getText().toString(), false);
 
         String warn = null;
         if (!epc.isEmpty() && !tid.isEmpty()) {
@@ -1120,8 +1120,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void writeOnce() {
         // 用补全后的值 —— 输入框里可能只有尾巴几位
-        final String epcHex = completeEpc(epcEdit.getText().toString());
-        final String tidHex = completeTid(tidEdit.getText().toString());
+        final String epcHex = completeEpc(epcEdit.getText().toString(), false);
+        final String tidHex = completeTid(tidEdit.getText().toString(), false);
         if (epcHex.isEmpty() && tidHex.isEmpty()) {
             setStatus("先在 EPC / TID 输入框里填要写的 Hex 值。");
             return;
