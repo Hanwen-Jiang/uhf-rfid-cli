@@ -5,26 +5,18 @@
     <string name="disconnect">断开</string>
     <string name="read">读 EPC/TID</string>
     <string name="write">写入 EPC / TID</string>
-    <string name="mode_hint">USB 直连（OTG 线接读写器）</string>
     <string name="scan_usb">扫描 USB 设备（排查插上没反应）</string>
     <string name="antenna">天线口</string>
     <string name="power">功率</string>
     <string name="antenna_label">天线口（1-4）</string>
     <string name="power_label">功率（0-30）</string>
     <string name="settings">设置</string>
-    <string name="epc_prefix_label">EPC 前缀（写标签时短输入自动补这一段，到 8B）</string>
-    <string name="scan_usb_short">扫描</string>
-    <string name="no_device_hint">插上 OTG 线和读写器就会自动连接。没反应就点顶栏右边那颗 USB 图标。</string>
-    <string name="settings_tip">「连接后复位」对齐原 GUI 的连接预处理，一般保持开启。「关蜂鸣器」发 0x7A 00 —— 注意部分读写器的蜂鸣器是硬件驱动的，软件关不掉（本机就是这样）。「读完自动上传」关掉后就得在这一页上面手点「上传到云端」。</string>
     <string name="restart">连接后复位</string>
     <string name="mute">关蜂鸣器</string>
-    <string name="not_connected">未连接。插上 OTG 线后点「连接」。</string>
     <string name="epc">EPC</string>
     <string name="tid">TID</string>
-    <string name="write_section">选择标签写入</string>
     <string name="epc_hint">EPC（Hex，12 字节）</string>
     <string name="tid_hint">TID（Hex，12 字节）</string>
-    <string name="write_note">写完一律回读校验。</string>
     <string name="raw_log">原始报文</string>
 
     <!-- 完整性校验 -->
@@ -35,29 +27,18 @@
     <string name="check_fail">不合格</string>
 
     <!-- 云端 -->
-    <string name="cloud">云端标签库</string>
     <string name="cloud_title">云端标签库</string>
-    <string name="cloud_open">打开云端标签库</string>
     <string name="cloud_upload">上传到云端</string>
     <string name="cloud_refresh">刷新</string>
-    <string name="cloud_settings">设置</string>
     <string name="cloud_only_unnamed">只看没命名的</string>
-    <string name="cloud_list_hint">点一行可以命名 / 删除；点右边的「写入」把这颗标签写进去。</string>
     <string name="cloud_loading">正在读取云端列表…</string>
     <string name="cloud_count">共 %1$d 条，其中 %2$d 条未命名</string>
     <string name="cloud_error">云端出错：%s</string>
     <string name="cloud_need_key">还没有设置云端 API key，请先填写。</string>
-    <string name="cloud_connect_first">先在主页连上读写器，再一键写入</string>
     <string name="cloud_write_title">写入这颗标签？</string>
     <string name="cloud_write">写入</string>
-    <string name="cloud_write_confirm">%1$s\n\nEPC: %2$s\n\n（同时写入它的 TID）</string>
-    <string name="cloud_write_done">写入完成</string>
-    <string name="cloud_write_failed">写入没成功，看下面的报告</string>
     <string name="cloud_writing">正在写入…</string>
     <string name="cloud_unnamed">（未命名）</string>
-    <string name="cloud_anomaly">异常</string>
-    <string name="cloud_suffix">后 5 位 %s</string>
-    <string name="cloud_row_hint">后 5 位 %1$s　状态 %2$s</string>
     <string name="cloud_name_hint">给它起个名字</string>
     <string name="cloud_save">保存</string>
     <string name="cloud_delete">删除</string>
@@ -67,7 +48,6 @@
     <string name="cloud_operator_default">默认用手机名：%s</string>
     <string name="cloud_auto_upload">读完标签自动上传</string>
     <string name="cloud_reset">恢复默认</string>
-    <string name="cloud_setup_tip">地址和 key 已经内置好了，直接用即可。使用者默认取手机自己的名字，几个人共用时用来区分谁传的。清空某一项 = 回到内置默认值。</string>
     <string name="cloud_auto_off_hint">自动上传已关闭 —— 读完要点「上传到云端」。</string>
     <string name="cloud_upload_ok">已上传：%s</string>
     <string name="cloud_upload_anomaly">破例上传（已记为异常）：%s</string>
@@ -75,14 +55,8 @@
     <string name="cloud_hit_unnamed">云端已有（未命名）　后 5 位 %1$s（读过 %2$d 次）\n不再重复上传。</string>
 
     <!-- 卡片 -->
-    <string name="hit_label">已在云端 · 不重复上传</string>
-    <string name="hit_label_new">刚上传到云端</string>
-    <string name="hit_label_unnamed">已在云端 · 还没命名</string>
     <string name="hit_sub">后 5 位 %1$s　读到过 %2$d 次　最后 %3$s</string>
-    <string name="hit_sub_written">后 5 位 %1$s　读到过 %2$d 次　写过 %3$d 次</string>
     <string name="result_ok">写入成功 ✓</string>
-    <string name="result_fail">写入失败 ✗</string>
-    <string name="cloud_uploaded">已上传，要现在命名吗？</string>
     <string name="cloud_read_first">先读一次标签再上传</string>
     <string name="cloud_bad_twice">连续两次读数相同但不合格 —— 已按异常破例上传并记录</string>
     <string name="cloud_bad_once">不合格：%s\n\n再读一次，若两次读数相同就破例上传并记为异常。</string>
@@ -95,7 +69,6 @@
     <!-- 主页 -->
     <string name="read_short">读标签</string>
     <string name="write_pick">选择标签…</string>
-    <string name="write_pick_hint">挑一颗写进贴近天线的标签。</string>
     <string name="write_target">将写入 %1$s（后 5 位 %2$s）</string>
     <string name="write_target_none">还没挑标签</string>
     <string name="pick_title">挑一颗要写的标签</string>
@@ -104,10 +77,8 @@
     <string name="pick_need_cache">补全数据还没拉回来 —— 到「标签库」页刷新一下。</string>
 
     <!-- 古法写入 -->
-    <string name="manual_hint">边敲边按云端已有的标签补全。</string>
     <string name="radio_section">读写器</string>
     <string name="cloud_section">云端</string>
-    <string name="preview_cards">预览动画</string>
     <string name="need_connect_first">还没连上读写器。点顶栏右边那颗 USB 图标连接。</string>
     <string name="reading">读取中…</string>
     <string name="read_ok">读到标签（%1$d ms）</string>
@@ -119,19 +90,16 @@
     <string name="anomaly_note">连续两次读数相同但第 9 位不符（EPC 应为 0 / TID 应为 2）</string>
     <string name="cloud_checking">正在查云端…</string>
     <string name="cloud_uploading">正在上传…</string>
-    <string name="cloud_renamed">已命名：%1$s</string>
     <string name="row_suffix">后 5 位 %1$s</string>
     <string name="row_anomaly">异常</string>
     <string name="row_seen">读到 %1$d 次</string>
     <string name="row_written">写过 %1$d 次</string>
-    <string name="reload_needed">读/写相关的操作要连上读写器才能用。</string>
     <!-- 连接 / 诊断 -->
     <string name="connecting">正在连接…</string>
     <string name="connected">已连接 %1$s</string>
     <string name="connect_failed">连接失败：%1$s</string>
     <string name="firmware_line">固件 %1$s</string>
     <string name="radio_line">天线 %1$d  功率 %2$d</string>
-    <string name="disconnected">连接已断开：%1$s</string>
     <string name="disconnected_manual">已断开。</string>
     <string name="device_unplugged">USB 被拔掉了</string>
     <string name="perm_denied">USB 权限被拒绝。没有权限就打不开串口。</string>
@@ -150,19 +118,20 @@
     <string name="cache_empty">补全数据还没拉回来 —— 到「标签库」页刷新一下</string>
     <string name="settings_saved">已保存：天线 %1$d　功率 %2$d</string>
     <string name="cloud_reset_done">已恢复默认。</string>
-    <string name="preview_running">预览：卡片动画（假数据，不读写标签）</string>
-    <string name="preview_done">预览：写入成功（假数据）</string>
+    <string name="antenna_port">%1$d 口</string>
+    <string name="edit_field">修改</string>
+    <string name="collapse_field">收起</string>
     <!-- 古法写入 -->
     <string name="manual_short">还没输满 %1$d 位（EPC %2$d，TID %3$d）</string>
     <string name="manual_mismatch">EPC 和 TID 的后 15 位不一致，写完这颗标签会被判「不合格」</string>
     <string name="manual_empty">先在 EPC / TID 里填要写的 Hex 值。</string>
     <string name="manual_bad_hex">Hex 格式不对：%1$s</string>
+    <string name="manual_write_hint">写完会回读校验。</string>
     <!-- 标签库 / 命名 -->
     <string name="cloud_name_title">命名</string>
     <string name="cloud_name_msg">%1$s\n后 5 位 %2$s</string>
     <string name="cloud_row_msg">后 5 位 %1$s\n点「保存」改名，或点「删除」从库里删掉。</string>
     <string name="cloud_delete_title">确定删除？</string>
-    <string name="cloud_write_msg">%1$s\nEPC: %2$s\n\n（同时写入它的 TID）</string>
     <string name="write_now">写入</string>
     <string name="pick_select">选择</string>
     <string name="write_now_target">写入 %1$s（%2$s）</string>
@@ -178,4 +147,41 @@
 <string name="connect_step_version">读取固件版本…</string>
 <string name="connect_ok_title">连接成功 ✓</string>
 <string name="connect_fail_title">连接失败 ✗</string>
+    <!-- Compose 界面新增（旧 XML 界面没有的） -->
+    <string name="dialog_cancel">取消</string>
+    <string name="dialog_close">关闭</string>
+
+    <!-- 顶栏连接状态（短标签，不放长句子） -->
+    <string name="status_connected">已连接</string>
+    <string name="status_disconnected">未连接</string>
+    <string name="status_connecting">连接中</string>
+    <string name="topbar_connect">连接读写器</string>
+    <string name="topbar_disconnect">断开读写器</string>
+
+    <!-- 分节标题 -->
+    <string name="section_epc_tid">EPC / TID 手工写入</string>
+    <string name="manual_section_status">当前状态</string>
+    <string name="manual_cache_line">云端已有 %1$d 条</string>
+    <string name="manual_cache_none">还没拉回来</string>
+    <string name="manual_reader_line">%1$s</string>
+    <string name="precache">补全</string>
+    <string name="reader">读写器</string>
+    <string name="target">目标</string>
+
+    <!-- 主页 -->
+    <string name="hit_mark">命中</string>
+    <string name="clear_readout">清空</string>
+    <string name="copied">已复制</string>
+    <string name="cleared">读数已清空。</string>
+
+    <!-- 标签库 -->
+    <string name="library_count">共 %1$d 条</string>
+    <string name="write_label">写入</string>
+
+    <!-- 设置页 -->
+    <string name="settings_power_unit">%1$d dBm</string>
+    <string name="save_settings">保存设置</string>
+
+    <!-- 通用 -->
+    <string name="not_set">未设置</string>
 </resources>

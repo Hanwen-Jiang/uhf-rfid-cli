@@ -1,4 +1,9 @@
 // 顶层构建文件。仓库统一在 settings.gradle 里声明，插件版本在这里声明。
 plugins {
     id 'com.android.application' version '8.13.2' apply false
+    // Compose 要 Kotlin。项目原来是纯 Java，这里把 Kotlin 加上 ——
+    // 两者可以共存，老的 Java 逻辑类一行都不用改。
+    id 'org.jetbrains.kotlin.android' version '2.1.0' apply false
+    // Kotlin 2.0 起，Compose 编译器是独立的 Gradle 插件，版本必须和 Kotlin 一致
+    id 'org.jetbrains.kotlin.plugin.compose' version '2.1.0' apply false
 }

@@ -41,11 +41,11 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/usb_device_filter" />
         </activity>
-        <activity
-            android:name=".CloudActivity"
-            android:exported="false"
-            android:label="@string/cloud_title"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection" />
+
+        <!--
+          CloudActivity 在 1.1.0 被 Compose 那边的 LibraryScreen 取代了，条目已删。
+          留这条注释是为了以后 grep 到 .CloudActivity 时知道它是去哪了。
+        -->
     </application>
 
 </manifest>
