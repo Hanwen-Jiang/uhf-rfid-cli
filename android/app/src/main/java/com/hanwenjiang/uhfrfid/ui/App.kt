@@ -105,8 +105,9 @@ enum class Tab(
  * 四个页签常驻可见，点一下就到位，不用先拉开再点。
  *
  * <p>顶栏**故意不放 App 名和副标题**：那两行字（"UHF RFID" + 一句 USB 说明）
- * 说的是用户已经知道的事，却霸着最贵的一行位置。所以左上角一个字都没有，
- * 右边只有"连没连上"（[StatusChip]）+ 扫描诊断 + 连接动作。
+ * 说的是用户已经知道的事，却霸着最贵的一行位置。所以左上角现在只有"连没连上"
+ * （[StatusChip]）这一颗胶囊 —— 它是这一页最该先看到的一件事，正好填上原本空着的左边；
+ * 右边只留两个动作：扫描诊断 + 连接/断开。
  *
  * <p>页签切换用 [AnimatedContent] 做"淡入 + 横向轻推"：往前切从右边推进来，
  * 往回切从左边，方向感对得上点的那一下。
@@ -129,13 +130,15 @@ fun App(usbConnect: UsbConnect, tagOps: TagOps) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                // 左上角保持空的 —— 没有汉堡、没有 logo、没有 App 名、没有副标题
-                title = {},
-                actions = {
+                // 状态胶囊住在最左边（原来在右边）：这里没有汉堡、没有 logo、没有 App 名、
+                // 没有副标题，空着也是空着，而"连没连上"是这一页最该先看到的一件事。
+                title = {
                     ConnectionChip(
                         connected = AppState.connected,
                         connecting = AppState.connecting,
                     )
+                },
+                actions = {
                     // 扫描：把 USB 诊断信息丢到控制面板的状态行里
                     IconButton(
                         modifier = Modifier.size(40.dp),
@@ -321,10 +324,10 @@ private fun AppBottomBar(tab: Tab, onSelect: (Tab) -> Unit) {
 // ---------------------------------------------------------------- 顶栏连接状态
 
 /**
- * 顶栏那颗连接状态标签 —— 短，而且点的就是"连接/断开"。
+ * 连接状态标签 —— 挂在顶栏 `title` 槽里，也就是**左上角**。
  *
  * <p>三种状态三种语义色：连接中=蓝（并在呼吸）、已连接=绿、未连接=灰。
- * 点它等于点原来那颗 USB 图标，所以顶栏右边不再重复放一个"连接"按钮。
+ * 它自己不可点：连接/断开那颗 USB 图标仍在顶栏右边，职责不重叠。
  */
 @Composable
 private fun ConnectionChip(connected: Boolean, connecting: Boolean) {
@@ -344,7 +347,6 @@ private fun ConnectionChip(connected: Boolean, connecting: Boolean) {
         text = text,
         color = color,
         pulsing = connecting,
-        modifier = Modifier.padding(end = 2.dp),
     )
 }
 

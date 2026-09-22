@@ -75,16 +75,22 @@ private val HexField = TextStyle(
  *       动一下 EPC 就把他的修改覆盖了。</li>
  * </ol>
  *
- * <p>光标一律移到末尾：补全是在用户敲的那个字符后面接一长串，
- * 光标留在中间的话，下一个字符会插进补出来的内容里。
+ * <p>光标只在**文本真的变了**的时候移到末尾：补全是在用户敲的那个字符后面接一长串，
+ * 光标留在中间的话，下一个字符会插进补出来的内容里。反过来，纯挪光标（文本一个字没变）
+ * 就尊重用户给的 selection —— 一律拽回末尾的话，"在光标处插字"就成了空话。
+ *
+ * <p><b>输入只有一条口子</b>：系统键盘和粘贴板敲进来的内容，全都先过 [hexOnly] 过滤
+ * （只留 `0-9 A-F`、统一大写），**再判断 grew**、再补全。
+ * 顺序不能反 —— Android 没有 hex 专用的键盘类型，系统键盘上 `Z` 就挨着 `A`，
+ * 脏字符要是先算进 grew 再进补全，等于拿着一串带 Z 的值去匹配标签。
  *
  * <p>页面上**没有多余的说明文字**：开头那句"边敲边按云端已有的标签补全。"已删
  * （行为本身就是那个行为，看一眼输入框就知道了）；唯一留下的解释是写入按钮底下
  * 那一句短提示"写完会回读校验。"—— 那是按下按钮前最该知道的一件事。
  * 两个框的 24 位进度计数（`EPC 12/24　TID 24/24`）和底下的红色警告都是**数据**，留着。
  *
- * <p>这一版把页面标题从「选择标签写入」（主页的字符串，串页了）改成了
- * [R.string.section_epc_tid]，并给两个框加了等宽字体和 24 位进度计数。
+ * <p>曾经在这一页挂过一套可折叠的十六进制小键盘（数字 + A-F + 退格 + EPC/TID 切换），
+ * 已整个删掉 —— 太抽象，用户要的就是系统键盘 + 这道过滤。
  */
 @Composable
 fun ManualScreen(tagOps: TagOps) {
@@ -98,6 +104,48 @@ fun ManualScreen(tagOps: TagOps) {
     var writing by remember { mutableStateOf(false) }
     LaunchedEffect(AppState.manualStatus) { writing = false }
 
+    /**
+     * EPC 框来了新内容：**先过滤 → 再看这次长没长 → 再补全 → 写回**（光标放末尾）。
+     * 顺带按第 9 位的规律把 TID 推出来（用户自己动过 TID 就不动它）。
+     */
+    fun putEpc(nv: TextFieldValue) {
+        val now = hexOnly(nv.text)
+        if (now == epc.text) {
+            // 文本没变：这一下只是挪光标，或者敲进来一个被过滤掉的字符（Z、空格…）。
+            // 光标要听用户的 —— 一律拽回末尾的话，"在光标处插字"就成了空话。
+            epc = TextFieldValue(now, caretIn(nv, now))
+            return
+        }
+        val grew = now.length > epc.text.length
+        val before = epc.text
+        val text = complete(now, TagCache.epcs(), grew)
+        epc = TextFieldValue(text, TextRange(text.length))
+        AppState.manualEpc = text
+        // EPC 变了就顺手把 TID 推出来（用户自己改过 TID 的话不动它）
+        if (!tidTouched && text != before) {
+            val guess = TagWrite.tidFromEpc(text)
+            if (guess.isNotEmpty()) {
+                tid = TextFieldValue(guess, TextRange(guess.length))
+                AppState.manualTid = guess
+            }
+        }
+    }
+
+    /** TID 框那一份，同上。 */
+    fun putTid(nv: TextFieldValue) {
+        val now = hexOnly(nv.text)
+        if (now == tid.text) {
+            tid = TextFieldValue(now, caretIn(nv, now))
+            return
+        }
+        val grew = now.length > tid.text.length
+        val text = complete(now, TagCache.tids(), grew)
+        tid = TextFieldValue(text, TextRange(text.length))
+        // 手动改过 TID 之后就不再由 EPC 自动覆盖；但清空 = 想让它跟着 EPC 走
+        tidTouched = text.isNotEmpty()
+        AppState.manualTid = text
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -109,28 +157,18 @@ fun ManualScreen(tagOps: TagOps) {
             // ---- EPC
             OutlinedTextField(
                 value = epc,
-                onValueChange = { nv ->
-                    val grew = nv.text.length > epc.text.length
-                    val before = epc.text
-                    val text = complete(nv.text, TagCache.epcs(), grew)
-                    epc = TextFieldValue(text, TextRange(text.length))
-                    AppState.manualEpc = text
-                    // EPC 变了就顺手把 TID 推出来（用户自己改过 TID 的话不动它）
-                    if (!tidTouched && text != before) {
-                        val guess = TagWrite.tidFromEpc(text)
-                        if (guess.isNotEmpty()) {
-                            tid = TextFieldValue(guess, TextRange(guess.length))
-                            AppState.manualTid = guess
-                        }
-                    }
-                },
+                onValueChange = { nv -> putEpc(nv) },
                 label = { Text(stringResource(R.string.epc_hint)) },
                 singleLine = true,
                 isError = epcError(epc.text),
                 textStyle = HexField,
                 shape = MaterialTheme.shapes.small,
+                // hex 只需要 0-9 A-F：键盘类型退而求其次用 Ascii（Android 没有 hex 专用键盘），
+                // 真正兜底的是 putEpc 里那道过滤；自动大写和自动纠错都关掉，
+                // 免得输入法往里塞它"猜"出来的词。
                 keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
                     keyboardType = KeyboardType.Ascii,
                     imeAction = ImeAction.Next,
                 ),
@@ -141,21 +179,15 @@ fun ManualScreen(tagOps: TagOps) {
             // ---- TID
             OutlinedTextField(
                 value = tid,
-                onValueChange = { nv ->
-                    val grew = nv.text.length > tid.text.length
-                    val text = complete(nv.text, TagCache.tids(), grew)
-                    tid = TextFieldValue(text, TextRange(text.length))
-                    // 手动改过 TID 之后就不再由 EPC 自动覆盖；但清空 = 想让它跟着 EPC 走
-                    tidTouched = text.isNotEmpty()
-                    AppState.manualTid = text
-                },
+                onValueChange = { nv -> putTid(nv) },
                 label = { Text(stringResource(R.string.tid_hint)) },
                 singleLine = true,
                 isError = tidError(tid.text),
                 textStyle = HexField,
                 shape = MaterialTheme.shapes.small,
                 keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
                     keyboardType = KeyboardType.Ascii,
                     imeAction = ImeAction.Done,
                 ),
@@ -278,6 +310,53 @@ fun ManualScreen(tagOps: TagOps) {
     }
 }
 
+// ---------------------------------------------------------------- 输入
+
+/**
+ * 是不是 hex 字符（`0-9 A-F a-f`）。
+ *
+ * <p>刻意不写 `Char.isDigit()`：那个认全世界的数字（阿拉伯-印度数字、全角数字都算），
+ * 而 EPC/TID 里只认这 16 个 ASCII 字符。
+ */
+private fun isHex(c: Char): Boolean =
+    c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
+
+/**
+ * 只留 `0-9 A-F`，字母统一成大写；其余字符（Z、空格、标点、中文…）整颗丢掉。
+ *
+ * <p>这是整个页面唯一的一道输入关口：系统键盘和粘贴板进来的内容都从这儿过。
+ * [KeyboardType.Ascii] 出来的还是全键盘（`Z` 就挨着 `A`，最容易误触），
+ * 所以真正的兜底只能是这里。
+ */
+private fun hexOnly(raw: String): String {
+    val sb = StringBuilder(raw.length)
+    for (c in raw) {
+        if (isHex(c)) sb.append(c.uppercaseChar())
+    }
+    return sb.toString()
+}
+
+/** [index] 之前有几个字符能留下 —— 把原始串上的下标换算到过滤后的串上。 */
+private fun hexIndex(raw: String, index: Int): Int {
+    var kept = 0
+    for (i in 0 until index.coerceIn(0, raw.length)) {
+        if (isHex(raw[i])) kept++
+    }
+    return kept
+}
+
+/**
+ * 这次改动落在过滤后的文本上的哪个位置。
+ *
+ * <p>挪光标时 [TextFieldValue.text] 一个字都没变，进来的只是新的 selection；
+ * 敲进来一个被过滤掉的字符时，selection 又是在**原始**串上算的 ——
+ * 被丢掉的字符不占位置，所以两个端点都得按"前面留了几个 hex 字符"重算，不能直接抄。
+ */
+private fun caretIn(nv: TextFieldValue, filtered: String): TextRange = TextRange(
+    hexIndex(nv.text, nv.selection.min).coerceIn(0, filtered.length),
+    hexIndex(nv.text, nv.selection.max).coerceIn(0, filtered.length),
+)
+
 /**
  * 补全一步。
  *
@@ -295,6 +374,8 @@ private fun complete(typed: String, known: List<String>, grew: Boolean): String 
     }
     return base
 }
+
+// ---------------------------------------------------------------- 提示
 
 /** 是否该显示红色错误边框：填了就得不长不短刚刚 24 位。 */
 private fun epcError(epc: String): Boolean =
