@@ -170,4 +170,12 @@
     <string name="write_ok_target">写入成功：%1$s（%2$s）</string>
     <string name="need_perm_hint">读写器插着，但没给 USB 权限。点顶栏右边那颗 USB 图标，在弹窗里点「允许」。</string>
     <string name="port_not_open">读写器在、权限也有，但串口打不开。多半是：① 别的 App 占着这个串口（把后台的串口工具关掉）② OTG 线只能充电不能传数据 ③ 拔了重插一次。</string>
+<string name="connect_step_port">正在打开串口…</string>
+<string name="connect_step_retry">串口没打开，重试 %1$d/%2$d…</string>
+<string name="connect_step_selfdriven">库的初始化没过，改用自驱 CH341…</string>
+<string name="connect_step_reset">正在复位读写器…</string>
+<string name="connect_step_radio">设置天线 %1$d、功率 %2$d…</string>
+<string name="connect_step_version">读取固件版本…</string>
+<string name="connect_ok_title">连接成功 ✓</string>
+<string name="connect_fail_title">连接失败 ✗</string>
 </resources>

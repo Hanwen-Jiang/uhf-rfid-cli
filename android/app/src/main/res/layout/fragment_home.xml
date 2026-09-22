@@ -2,10 +2,13 @@
 <!--
   主页。
 
-  上面是「控制面板」：固定高度，读到的状态、命中信息、EPC/TID、校验结果都在这块里，
-  所以内容变化时版面不会跳。反馈走边框动画 —— 不缩放、不撑空间。
+  上面是「控制面板」：<b>固定高度</b>，所以内容怎么变版面都不跳。
+  它有两种状态，在同一个框里切换：
+    · 平时   —— 状态、命中信息、EPC/TID、校验结果
+    · 连接中 —— 进度条 + 当前步骤（同一个框，所以也不会跳版）
+  反馈走边框动画（不缩放，不会把周围挤开）。
 
-  下面是操作区：读标签 / 上传到云端，选择标签… / 写入。
+  下面是操作区：读标签 / 上传到云端，写入 / 挑标签。
 -->
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -19,7 +22,7 @@
         android:orientation="vertical"
         android:padding="14dp">
 
-        <!-- ============ 控制面板（固定高度，内容变化不跳版） ============ -->
+        <!-- ============ 控制面板（固定高度） ============ -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/panel"
             android:layout_width="match_parent"
@@ -30,84 +33,130 @@
             app:strokeColor="#B0BEC5"
             app:strokeWidth="2dp">
 
-            <LinearLayout
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:padding="14dp">
+                android:layout_height="match_parent">
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/statusText"
+                <!-- 平时显示的内容 -->
+                <LinearLayout
+                    android:id="@+id/panelBody"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="2"
-                    android:text="@string/no_device_hint"
-                    android:textColor="#546E7A"
-                    android:textSize="12sp" />
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:padding="14dp">
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/hitName"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textColor="#0D47A1"
-                    android:textSize="22sp"
-                    android:textStyle="bold"
-                    android:visibility="gone" />
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/statusText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:text="@string/no_device_hint"
+                        android:textColor="#546E7A"
+                        android:textSize="12sp" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/hitSub"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:fontFamily="monospace"
-                    android:textColor="#1565C0"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/hitName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="#0D47A1"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
 
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginBottom="8dp"
-                    android:background="#E0E0E0" />
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/hitSub"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:fontFamily="monospace"
+                        android:textColor="#1565C0"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/epcText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="middle"
-                    android:fontFamily="monospace"
-                    android:maxLines="1"
-                    android:text="—"
-                    android:textIsSelectable="true"
-                    android:textSize="14sp" />
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="#E0E0E0" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/tidText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="middle"
-                    android:fontFamily="monospace"
-                    android:maxLines="1"
-                    android:text="—"
-                    android:textIsSelectable="true"
-                    android:textSize="14sp" />
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/epcText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="middle"
+                        android:fontFamily="monospace"
+                        android:maxLines="1"
+                        android:text="—"
+                        android:textIsSelectable="true"
+                        android:textSize="14sp" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/checkText"
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/tidText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="middle"
+                        android:fontFamily="monospace"
+                        android:maxLines="1"
+                        android:text="—"
+                        android:textIsSelectable="true"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/checkText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 连接中显示：进度条 + 当前步骤 -->
+                <LinearLayout
+                    android:id="@+id/connectBox"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:orientation="vertical"
+                    android:padding="20dp"
+                    android:visibility="gone">
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/connectTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/connecting"
+                        android:textColor="#0D47A1"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/connectBar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:indeterminate="true"
+                        app:indicatorColor="#1E88E5"
+                        app:trackColor="#E3F2FD"
+                        app:trackCornerRadius="4dp"
+                        app:trackThickness="6dp" />
+
+                    <com.google.android.material.textview.MaterialTextView
+                        android:id="@+id/connectStep"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:textColor="#546E7A"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </FrameLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- ============ 操作区 ============ -->
@@ -126,7 +175,7 @@
                 android:layout_height="match_parent"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:paddingEnd="64dp"
+                android:paddingEnd="72dp"
                 android:text="@string/read_short"
                 android:textSize="16sp"
                 app:cornerRadius="12dp"
@@ -167,9 +216,7 @@
 
         <!--
           写标签：<b>一个</b>按钮，右边划一条热区当"下拉"。
-          不用两个按钮拼 —— 那样各自画背景和阴影，永远有接缝、也不像一个控件。
-          圆角交给 cornerRadius（注意：设了它就会盖掉 shapeAppearanceOverlay，
-          两边别同时写）。
+          圆角交给 cornerRadius（注意：设了它就会盖掉 shapeAppearanceOverlay）。
         -->
         <FrameLayout
             android:layout_width="match_parent"
@@ -183,7 +230,7 @@
                 android:ellipsize="end"
                 android:enabled="false"
                 android:maxLines="1"
-                android:paddingEnd="64dp"
+                android:paddingEnd="72dp"
                 android:text="@string/write_now"
                 android:textSize="15sp"
                 app:cornerRadius="12dp"
@@ -191,26 +238,26 @@
                 app:iconGravity="end"
                 app:iconPadding="16dp" />
 
-            <!-- 分隔线：让"这里可以下拉"看得出来 -->
-            <View
-                android:layout_width="1dp"
-                android:layout_height="24dp"
-                android:layout_gravity="end|center_vertical"
-                android:layout_marginEnd="56dp"
-                android:background="#66FFFFFF" />
-
-            <!-- 透明热区，只为接下拉的点击 -->
-            <!-- 同 uploadZone：Z 必须高过按钮，否则点击会被按钮吃掉 -->
-            <View
+            <!-- 同 uploadZone：分隔线放热区内部，Z 也高过按钮 -->
+            <LinearLayout
                 android:id="@+id/dropZone"
-                android:layout_width="56dp"
+                android:layout_width="60dp"
                 android:layout_height="match_parent"
                 android:layout_gravity="end"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:elevation="6dp"
                 android:focusable="false"
-                android:outlineProvider="none" />
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:outlineProvider="none">
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="24dp"
+                    android:background="#66FFFFFF" />
+            </LinearLayout>
         </FrameLayout>
+
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

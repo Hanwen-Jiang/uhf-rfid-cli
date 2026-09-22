@@ -37,6 +37,9 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
     private MaterialCardView panel;
     private TextView statusText, epcText, tidText, checkText, hitName, hitSub;
     private MaterialButton readBtn, writeBtn;
+    private View panelBody, connectBox;
+    private TextView connectTitle, connectStep;
+    private com.google.android.material.progressindicator.LinearProgressIndicator connectBar;
 
     /** 用户挑好、准备写进去的那颗云端标签。 */
     private CloudClient.Tag target;
@@ -59,6 +62,11 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
         hitName = v.findViewById(R.id.hitName);
         hitSub = v.findViewById(R.id.hitSub);
         readBtn = v.findViewById(R.id.readBtn);
+        panelBody = v.findViewById(R.id.panelBody);
+        connectBox = v.findViewById(R.id.connectBox);
+        connectTitle = v.findViewById(R.id.connectTitle);
+        connectStep = v.findViewById(R.id.connectStep);
+        connectBar = v.findViewById(R.id.connectBar);
         writeBtn = v.findViewById(R.id.writeBtn);
         readBtn.setOnClickListener(x -> readOnce(false));
         // 按钮主体 = 读；右边那条透明热区 = 上传到云端
@@ -91,6 +99,46 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
     @Override
     public void onConnectionChanged() {
         updateUploadBtn();
+    }
+
+    /**
+     * 连接进行到哪一步 —— 把面板切成连接中卡片。
+     *
+     * <p>面板是固定高度的，两种内容在同一个框里切换，所以切的时候版面不跳。
+     */
+    @Override
+    public void onConnectStep(String step) {
+        if (connectBox == null) return;
+        panelBody.setVisibility(View.GONE);
+        connectBox.setVisibility(View.VISIBLE);
+        connectTitle.setText(R.string.connecting);
+        connectTitle.setTextColor(0xFF0D47A1);
+        connectStep.setText(step);
+        connectBar.setIndeterminate(true);
+        connectBar.setVisibility(View.VISIBLE);
+        borderTo(BORDER_HIT, false);
+    }
+
+    /**
+     * 连接结束：进度条收起，标题换成结果，边框走动画。
+     *
+     * <p>成功绿脉冲、失败红常亮 —— 都只动边框，不缩放，不会把周围挤开。
+     */
+    @Override
+    public void onConnectDone(boolean ok, String message) {
+        if (connectBox == null) return;
+        connectBar.setVisibility(View.GONE);
+        connectTitle.setText(ok ? R.string.connect_ok_title : R.string.connect_fail_title);
+        connectTitle.setTextColor(ok ? BORDER_OK : BORDER_BAD);
+        connectStep.setText(message);
+        borderTo(ok ? BORDER_OK : BORDER_BAD, ok);
+
+        // 让结果停留一下再切回平时的内容 —— 否则连接成功一闪就没了
+        connectBox.postDelayed(() -> {
+            if (connectBox == null || !isAdded()) return;
+            connectBox.setVisibility(View.GONE);
+            panelBody.setVisibility(View.VISIBLE);
+        }, ok ? 1200 : 3500);
     }
 
     @Override

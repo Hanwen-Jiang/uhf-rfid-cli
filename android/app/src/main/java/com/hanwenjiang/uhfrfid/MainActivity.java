@@ -214,6 +214,29 @@ public class MainActivity extends AppCompatActivity {
          */
         default void onConnectionChanged() {
         }
+
+        /** 连接进行到哪一步了（打开串口 / 初始化芯片 / 复位 …）。 */
+        default void onConnectStep(String step) {
+        }
+
+        /** 连接结束。ok=false 时 message 是失败原因。 */
+        default void onConnectDone(boolean ok, String message) {
+        }
+    }
+
+    /** 把连接进度转给当前这一页。 */
+    private void reportStep(String step) {
+        runOnUiThread(() -> {
+            Fragment f = getSupportFragmentManager().findFragmentById(R.id.content);
+            if (f instanceof StatusHost) ((StatusHost) f).onConnectStep(step);
+        });
+    }
+
+    private void reportDone(boolean ok, String message) {
+        runOnUiThread(() -> {
+            Fragment f = getSupportFragmentManager().findFragmentById(R.id.content);
+            if (f instanceof StatusHost) ((StatusHost) f).onConnectDone(ok, message);
+        });
     }
 
     // ------------------------------------------------------------ 连接
@@ -327,6 +350,7 @@ public class MainActivity extends AppCompatActivity {
         final boolean doReset = Prefs.restartOnConnect(this);
         final boolean mute = Prefs.muteBeep(this);
 
+        reportStep(getString(R.string.connect_step_port));
         setStatus(getString(R.string.connecting));
         Bg.run(() -> {
             try {
@@ -336,6 +360,9 @@ public class MainActivity extends AppCompatActivity {
                 IOException lastErr = null;
                 final int tries = 6;
                 for (int attempt = 1; attempt <= tries && t == null; attempt++) {
+                    if (attempt > 1) {
+                        reportStep(getString(R.string.connect_step_retry, attempt, tries));
+                    }
                     Transport cand = new SerialTransport(usbManager, granted);
                     try {
                         cand.open();
@@ -350,6 +377,7 @@ public class MainActivity extends AppCompatActivity {
                     // 库被版本校验挡死（这颗芯片读 0x5F 回的字节不是 0x00），
                     // 那就自己驱动 —— 同一套寄存器序列，跳过那次校验。
                     if (granted.isEmpty()) throw lastErr;
+                    reportStep(getString(R.string.connect_step_selfdriven));
                     UsbDevice rawDev = granted.iterator().next();
                     Ch341RawTransport raw = new Ch341RawTransport(usbManager, rawDev);
                     try {
@@ -362,11 +390,16 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 RfidReader reader = session.use(t);
-                if (doReset) reader.restart();
+                if (doReset) {
+                    reportStep(getString(R.string.connect_step_reset));
+                    reader.restart();
+                }
                 reader.clearEpcMatch();
+                reportStep(getString(R.string.connect_step_radio, ant, pw));
                 if (mute) reader.setBeep(false);
                 reader.setAntenna(ant);
                 reader.setPower(pw);
+                reportStep(getString(R.string.connect_step_version));
                 byte[] ver = reader.readVersion();
 
                 String msg = getString(R.string.connected, t.describe())
@@ -377,6 +410,7 @@ public class MainActivity extends AppCompatActivity {
                     connecting = false;
                     reflectConnectionState();
                     setStatus(msg);
+                    reportDone(true, msg);
                 });
             } catch (Exception e) {
                 final String why = e.getMessage() == null ? e.toString() : e.getMessage();
@@ -384,6 +418,7 @@ public class MainActivity extends AppCompatActivity {
                     connecting = false;
                     reflectConnectionState();
                     setStatus(getString(R.string.connect_failed, why));
+                    reportDone(false, getString(R.string.connect_failed, why));
                 });
             }
         });
