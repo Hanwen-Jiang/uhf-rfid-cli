@@ -47,6 +47,15 @@ public class MainActivity extends AppCompatActivity {
     private MenuItem connectItem;
     /** 自动连接只试一次；用户主动断开后允许再试。 */
     private boolean autoTried;
+
+    /**
+     * 正在连接中。
+     *
+     * <p>连接要好几秒（库的版本校验会重试 6 次再切自驱）。期间再点那颗图标、
+     * 或者 onResume 又触发一次自动连，就会起第二个连接去抢同一个串口 ——
+     * 表现是「连接失败：串口没打开」。
+     */
+    private boolean connecting;
     /** 上一次 toast 过的状态，避免重复弹同样的提示。 */
     private String lastToast;
 
@@ -71,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
 
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(permReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
@@ -96,8 +106,14 @@ public class MainActivity extends AppCompatActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) {
-            autoConnect();
+            onDeviceAttached();
         }
+    }
+
+    /** 插上读写器 = 明确的意图，允许再自动连一次（哪怕之前主动断开过）。 */
+    private void onDeviceAttached() {
+        autoTried = false;
+        autoConnect();
     }
 
     @Override
@@ -210,6 +226,10 @@ public class MainActivity extends AppCompatActivity {
                 session.onTransportLost(getString(R.string.device_unplugged));
                 return;
             }
+            if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+                onDeviceAttached();
+                return;
+            }
             if (!ACTION_USB_PERMISSION.equals(action)) return;
             UsbDevice dev = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
             if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
@@ -225,7 +245,9 @@ public class MainActivity extends AppCompatActivity {
     private void connectOrDisconnect() {
         if (session.isConnected()) {
             session.disconnect();
-            autoTried = false;      // 主动断开后，下次插拔/回前台可以再自动连
+            // 主动断开就保持断开：不再被 onResume 自动连回来。
+            // 想重连可以点这颗图标，或者把线拔了重插。
+            autoTried = true;
             setStatus(getString(R.string.disconnected_manual));
             reflectConnectionState();
             return;
@@ -276,10 +298,12 @@ public class MainActivity extends AppCompatActivity {
      */
     private void autoConnect() {
         if (session.isConnected() || autoTried) return;
-        autoTried = true;
 
         java.util.List<UsbSerialDriver> drivers = SerialTransport.listDrivers(usbManager);
-        if (drivers.isEmpty()) return;      // 没插读写器，别拿提示烦人
+        // 没插设备不算试过了 —— 否则先开 App 再插读写器时，
+        // autoTried 已经置位，插上后会被守卫挡住、永远不自动连（踩过）
+        if (drivers.isEmpty()) return;
+        autoTried = true;
 
         boolean anyGranted = false;
         for (UsbSerialDriver d : drivers) {
@@ -295,6 +319,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void doConnect() {
+        if (connecting) return;      // 已经在连了，别起第二个抢串口
+        connecting = true;
+
         final int ant = Prefs.antenna(this);
         final int pw = Prefs.power(this);
         final boolean doReset = Prefs.restartOnConnect(this);
@@ -347,12 +374,14 @@ public class MainActivity extends AppCompatActivity {
                                 RfidFrame.hexSpaced(ver)) : "")
                         + "\n" + getString(R.string.radio_line, ant, pw);
                 runOnUiThread(() -> {
+                    connecting = false;
                     reflectConnectionState();
                     setStatus(msg);
                 });
             } catch (Exception e) {
                 final String why = e.getMessage() == null ? e.toString() : e.getMessage();
                 runOnUiThread(() -> {
+                    connecting = false;
                     reflectConnectionState();
                     setStatus(getString(R.string.connect_failed, why));
                 });

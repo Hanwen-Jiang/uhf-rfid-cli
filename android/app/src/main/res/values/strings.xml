@@ -14,7 +14,7 @@
     <string name="settings">设置</string>
     <string name="epc_prefix_label">EPC 前缀（写标签时短输入自动补这一段，到 8B）</string>
     <string name="scan_usb_short">扫描</string>
-    <string name="no_device_hint">插上 OTG 线和读写器就会自动连接。没反应就点「连接」。</string>
+    <string name="no_device_hint">插上 OTG 线和读写器就会自动连接。没反应就点顶栏右边那颗 USB 图标。</string>
     <string name="settings_tip">「连接后复位」对齐原 GUI 的连接预处理，一般保持开启。「关蜂鸣器」发 0x7A 00 —— 注意部分读写器的蜂鸣器是硬件驱动的，软件关不掉（本机就是这样）。「读完自动上传」关掉后就得在这一页上面手点「上传到云端」。</string>
     <string name="restart">连接后复位</string>
     <string name="mute">关蜂鸣器</string>

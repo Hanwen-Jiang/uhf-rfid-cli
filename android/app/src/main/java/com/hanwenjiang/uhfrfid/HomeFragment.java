@@ -502,13 +502,13 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
     }
 
     /**
-     * 读按钮的可用状态跟着连接走。
+     * 读按钮**始终可点**，不按连接状态禁用。
      *
-     * <p>上传热区<b>一直可点</b> —— 没连上或没读过时 uploadCurrent() 会自己给说明，
-     * 比让热区静默失效好（热区本来就看不出来，禁用与否用户也无从判断）。
+     * <p>以前是禁用，结果没连上时点它毫无反应 —— 用户只会以为 App 坏了或按钮没做。
+     * 保持可点，由 readOnce() 明确说一句「还没连上读写器」，比静默失效强。
      */
     private void updateUploadBtn() {
-        readBtn.setEnabled(RfidSession.get().isConnected());
+        readBtn.setEnabled(true);
     }
 
     static String msg(Exception e) {
