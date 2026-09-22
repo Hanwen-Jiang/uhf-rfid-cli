@@ -168,4 +168,6 @@
     <string name="write_now_target">写入 %1$s（%2$s）</string>
     <string name="written_sub">后 5 位 %1$s　刚写入 ✓</string>
     <string name="write_ok_target">写入成功：%1$s（%2$s）</string>
+    <string name="need_perm_hint">读写器插着，但没给 USB 权限。点顶栏右边那颗 USB 图标，在弹窗里点「允许」。</string>
+    <string name="port_not_open">读写器在、权限也有，但串口打不开。多半是：① 别的 App 占着这个串口（把后台的串口工具关掉）② OTG 线只能充电不能传数据 ③ 拔了重插一次。</string>
 </resources>

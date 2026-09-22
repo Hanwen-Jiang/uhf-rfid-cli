@@ -134,7 +134,7 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
     private void readOnce(boolean forUpload) {
         final RfidSession s = RfidSession.get();
         if (!s.isConnected()) {
-            setStatus(getString(R.string.need_connect_first));
+            setStatus(whyNotConnected());
             return;
         }
         setStatus(getString(R.string.reading));
@@ -509,6 +509,35 @@ public class HomeFragment extends Fragment implements MainActivity.StatusHost {
      */
     private void updateUploadBtn() {
         readBtn.setEnabled(true);
+    }
+
+    /**
+     * 没连上时，具体是哪一步卡住。
+     *
+     * <p>只说一句「还没连上」没用 —— 用户已经点过了还是不行，需要知道是没插设备、
+     * 没给权限，还是设备在但串口打不开（那多半是别的 App 占着，或者线只能充电）。
+     */
+    private String whyNotConnected() {
+        try {
+            java.util.List<com.hoho.android.usbserial.driver.UsbSerialDriver> ds =
+                    SerialTransport.listDrivers(
+                            (android.hardware.usb.UsbManager) requireContext()
+                                    .getSystemService(android.content.Context.USB_SERVICE));
+            if (ds.isEmpty()) {
+                return getString(R.string.no_device_found);
+            }
+            android.hardware.usb.UsbManager um =
+                    (android.hardware.usb.UsbManager) requireContext()
+                            .getSystemService(android.content.Context.USB_SERVICE);
+            for (com.hoho.android.usbserial.driver.UsbSerialDriver d : ds) {
+                if (!um.hasPermission(d.getDevice())) {
+                    return getString(R.string.need_perm_hint);
+                }
+            }
+            return getString(R.string.port_not_open);
+        } catch (Exception e) {
+            return getString(R.string.need_connect_first);
+        }
     }
 
     static String msg(Exception e) {
