@@ -22,3 +22,7 @@ cloud/.wrangler/
 cloud/node_modules/
 cloud/.dev.vars
 
+
+# 调试验证用的截图，不进版本库
+android/shots/
+
