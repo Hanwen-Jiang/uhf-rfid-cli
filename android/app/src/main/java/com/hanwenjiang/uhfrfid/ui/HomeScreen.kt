@@ -53,17 +53,47 @@ import kotlinx.coroutines.delay
 /**
  * 控制面板固定就这么高 —— 内容和状态怎么变，这个框都不动。
  *
- * 上一版 212dp，实测平时（形态三）底下空出近 100dp，这一版量着内容收到 152dp，
- * 重排了内部层次（状态行 / 命中大名字 / 分隔线 / EPC·TID / 结论）刚好填满。
+ * <p>**176dp 是量出来的，不是拍的。** 上一版 152dp 是照着"平时"（形态三、
+ * 没命中云端）量的，可面板还有更胖的一种状态：**命中云端**。那时候里面同时有
+ * 状态行 + 命中大名字 + 副标题 + 分隔线 + EPC + TID + 校验结论，逐项累加：
+ *
+ * <pre>
+ *   内边距 11×2        = 22.0
+ *   状态行 1 行         = 19.0   （bodyMedium 行高 19sp）
+ *   名字块 3 + 26 + 15.5= 44.5   （headlineSmall 26 / bodySmall 15.5）
+ *   分隔线 5 + 1 + 5    = 11.0
+ *   EPC / TID 20 + 1 + 20 = 41.0  （MonoSpan 行高 20sp）
+ *   结论行 4 + 15.5     = 19.5
+ *   合计                ≈ 157dp
+ * </pre>
+ *
+ * 152dp 装不下这 157dp，最底下那行**校验结论**被面板的下边框切掉 —— 就是用户说的
+ * "展示不全"。实测（在 IdleBody 里挂 onSizeChanged 量内容高度）：内容 169px，
+ * 本机密度 1.25 → 135.2dp，加内边距 22dp = 157.2dp，和算出来的对得上。
+ *
+ * <p>这一版两手一起做：
+ * <ol>
+ *   <li>**先压内容**：命中时状态行收到 1 行（它和下面的名字/副标题本来就在说同一件事，
+ *       省 19dp），分隔线上下各 6→5、名字块上沿 4→3、结论上沿 5→4（再省 4dp）——
+ *       不压的话最胖要 180dp。</li>
+ *   <li>**再把框定到够用**：176dp，比实测的 157dp 多留 19dp（约 12%）余量。
+ *       留余量是因为行高随系统 fontScale 走，用户把字号调大一点时，
+ *       结论行不能又被裁掉。</li>
+ * </ol>
+ *
+ * <p>高度写死的理由没变：连接中、连接成功、连接失败、命中云端、读到标签 ——
+ * 五种情况内容差别很大，让它自己撑高的话，状态一变整页上下抖一下，
+ * 下面的按钮跟着跳，按都按不准。
  */
-private val PanelHeight = 152.dp
+private val PanelHeight = 176.dp
 
 /**
  * 主页：控制面板 + 读标签 + 写入。
  *
- * <p>控制面板是这一页的主角，**高度写死 152dp**：连接中、连接成功、连接失败、
- * 命中云端、读到标签 —— 五种情况下内容差别很大，如果让它自己撑高，每次状态一变
- * 整页都会上下抖一下，下面的按钮跟着跳，按都按不准。所以框定死，内容在里面切换。
+ * <p>控制面板是这一页的主角，**高度写死 176dp**（这个数是量出来的，见 [PanelHeight]）：
+ * 连接中、连接成功、连接失败、命中云端、读到标签 —— 五种情况下内容差别很大，
+ * 如果让它自己撑高，每次状态一变整页都会上下抖一下，下面的按钮跟着跳，按都按不准。
+ * 所以框定死，内容在里面切换。
  *
  * <p>**这一版把首页所有"解释性"文字都删了**：按钮下面那两行 hint
  * （"读一次标签，结果直接上传云端"/"把选中的标签写进贴近天线的这一颗"）、
@@ -277,17 +307,24 @@ private fun ConnectResultBody(ok: Boolean) {
  * 层次从上到下：状态行 → 命中云端的大名字 → 分隔线 → EPC / TID 读数 → 完整性结论。
  * EPC / TID 用等宽大字（15sp + 0.8 字距），分两行排 —— 24 位十六进制挤一行在手机上
  * 会折断换行，反而更难读；上下两行还能直接对齐着比"第 9 位是不是 0 / 2"。
+ *
+ * <p>**状态行的行数是跟着命中走的**：命中云端时，状态行说的是"云端已有：xxx
+ * 后 5 位 xxx（读过 n 次）\n不再重复上传"，而下面那颗大名字 + 副标题已经把
+ * 同一件事说全了 —— 所以命中时状态行只占 1 行，把高度让给名字和 EPC/TID；
+ * 没命中时它才是唯一的信息来源，给满 2 行。两种情况下都是 `Ellipsis` 收尾，
+ * 绝不会把框顶变形。
  */
 @Composable
 private fun IdleBody() {
     val hit = AppState.hitName
     Column(modifier = Modifier.fillMaxSize()) {
-        // 状态行：最多两行，超了省略 —— 宁可能看不全，也不让它把框顶变形
+        // 状态行：命中时 1 行（下面有名字顶着），平时最多 2 行 —— 超了省略，
+        // 宁可能看不全，也不让它把框顶变形
         Text(
             text = AppState.status,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
+            maxLines = if (hit != null) 1 else 2,
             overflow = TextOverflow.Ellipsis,
         )
 
@@ -298,7 +335,7 @@ private fun IdleBody() {
             exit = fadeOut(tween(140)) + shrinkVertically(tween(160)),
         ) {
             Column {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = hit ?: "",
@@ -329,9 +366,9 @@ private fun IdleBody() {
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(5.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(5.dp))
 
         ReadoutLine(
             label = stringResource(R.string.epc),
@@ -344,7 +381,7 @@ private fun IdleBody() {
             value = AppState.tid,
             hit = AppState.hitName != null && !AppState.justWritten,
         )
-        Spacer(Modifier.height(5.dp))
+        Spacer(Modifier.height(4.dp))
 
         // 结论行：左边一句话说这读数合不合格，右边一个「清空」把两条读数抹掉。
         // 没读过（checkOk == null）时这行留空 —— 原来兜底显示「写完一律回读校验。」

@@ -231,6 +231,7 @@ fun App(usbConnect: UsbConnect, tagOps: TagOps) {
             TagPickerDialog(
                 all = cache,
                 onDismiss = { pickerOpen = false },
+                onRefresh = { tagOps.refreshCacheAsync() },
                 onPick = { picked ->
                     AppState.target = picked
                     AppState.status = picked.suffix?.let { suffix ->
@@ -358,11 +359,16 @@ private fun ConnectionChip(connected: Boolean, connecting: Boolean) {
  * <p>数据取自 [TagCache]（内存里的补全数据，不看当前列表页筛没筛）。
  * **这里只挑不写** —— 挑完只是把 [AppState.target] 设上，真正写要再点一次
  * 「写入」并确认，免得手滑把标签写坏。
+ *
+ * <p>缓存空的时候（还没跟云端同步过）弹窗照样出，只是里面没有可挑的行 ——
+ * 那种时候**必须给一个能按的动作**：底下的「刷新」当场去拉一遍，拉回来列表
+ * 自己会填上。绝不能出现"点了 ▼ 什么都不发生"。
  */
 @Composable
 private fun TagPickerDialog(
     all: List<CloudClient.Tag>,
     onDismiss: () -> Unit,
+    onRefresh: () -> Unit,
     onPick: (CloudClient.Tag) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -424,7 +430,18 @@ private fun TagPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) }
+            if (all.isEmpty()) {
+                // 缓存是空的：一句"补全数据还没拉回来"等于把死路又指了一遍。
+                // 这里直接给动作 —— 按下去当场去云端拉，拉回来上面的列表自己填。
+                TextButton(onClick = onRefresh) { Text(stringResource(R.string.cloud_refresh)) }
+            } else {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) }
+            }
+        },
+        dismissButton = {
+            if (all.isEmpty()) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) }
+            }
         },
     )
 }

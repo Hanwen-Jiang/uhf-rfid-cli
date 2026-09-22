@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -160,8 +161,10 @@ fun SectionCard(
  * 而且禁用态的配色改不动。这里自己用 Surface 拼一个，高度统一 [height]，
  * 按下时整颗缩到 0.97（只用 scale，不参与布局，所以按下时旁边的东西不会动）。
  *
- * @param enabled    整个按钮是否可用（含右侧热区）
- * @param rightEnabled 只控制右侧热区能不能点
+ * @param enabled    只控制**主区**能不能用（底色、字色、按下缩放）。
+ *                   它**管不到**右侧热区 —— 见 [rightEnabled]。
+ * @param rightEnabled 右侧热区的**视觉**明暗开关，同样管不到能不能点。
+ *                   保留只是为了源码兼容（老调用点还在传），新代码不要再传。
  * @param hint       按钮下面那行小字；null（默认）就不占地方。
  *                   首页和古法写入页都已经不再传它 —— 那种"这按钮是干嘛的"说明性
  *                   小字用户要求删掉。参数留着，是为了以后真需要一行数据型副标题时
@@ -176,7 +179,7 @@ fun SplitActionButton(
     onRightClick: (() -> Unit)? = null,
     rightContentDescription: String? = null,
     enabled: Boolean = true,
-    rightEnabled: Boolean = enabled,
+    rightEnabled: Boolean = true,
     loading: Boolean = false,
     containerColor: Color = MaterialTheme.colorScheme.primary,
     contentColor: Color = MaterialTheme.colorScheme.onPrimary,
@@ -198,7 +201,9 @@ fun SplitActionButton(
     )
     // 禁用时主区压到 60% —— 只是变淡，尺寸一点不变，切换时版面不跳
     val mainAlpha = if (enabled) 1f else 0.6f
-    val rightAlpha = if (enabled && rightEnabled) 1f else 0.4f
+    // 右热区的明暗只看 rightEnabled，**不看 enabled**：「写入」没挑标签时整颗是灰的，
+    // 但挑标签的入口就在右热区上，跟着一起压到 0.4 会让它看着像块死区（踩过）。
+    val rightAlpha = if (rightEnabled) 1f else 0.4f
 
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
@@ -268,7 +273,21 @@ fun SplitActionButton(
                             .width(54.dp)
                             .fillMaxSize()
                             .clip(RoundedCornerShape(topEnd = 14.dp, bottomEnd = 14.dp))
-                            .clickable(enabled = enabled && rightEnabled) { onRightClick() },
+                            // **副按钮永远能点。**
+                            //
+                            // 这里以前写的是 `clickable(enabled = enabled && rightEnabled)`，
+                            // 而 rightEnabled 的默认值又是 `enabled` —— 两个一叠加，右热区
+                            // 就被主按钮的禁用态锁死了：「写入」在没挑标签时 enabled=false，
+                            // 于是那条 54dp 的 ▼ 怎么点都没反应，而挑标签的入口恰恰就在那儿，
+                            // 死循环。修法不是把某个默认值改掉（那样还能被上层传 false 再锁一次），
+                            // 而是**把这个开关彻底拆掉**：只要上层给了 onRightClick，就一定响。
+                            //
+                            // 复用主区的 interactionSource：点右热区时整颗按钮一起缩到 0.97，
+                            // 跟点左半边是同一种按下反馈（自己的水波纹也保留）。
+                            .clickable(
+                                interactionSource = source,
+                                indication = LocalIndication.current,
+                            ) { onRightClick() },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
