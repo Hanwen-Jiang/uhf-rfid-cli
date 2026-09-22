@@ -187,11 +187,14 @@ public class UsbConnect {
         step(app.getString(R.string.connect_step_port));
         Bg.run(() -> {
             try {
-                // CH34x 的初始化（读 0x5F 校验版本）有时会返回 0xff/0xec 而失败，
-                // 重试几次通常能过。所以多试几次、退避递增。
+                // 先用库。**只试 2 次就够** ——
+                // 库的 CH34x 初始化是读 0x5F 校验版本，要求第 2 字节是 0x00，
+                // 而这颗 CH341A 固定返回 DF EC，属于**确定性失败**，重试 6 次和 1 次
+                // 结果完全一样，只是白等 5 秒。留一次重试是防 USB 一次性抖动。
+                // 真的过不去就立刻切自驱，那条路才是能用的。
                 Transport t = null;
                 IOException lastErr = null;
-                final int tries = 6;
+                final int tries = 2;
                 for (int attempt = 1; attempt <= tries && t == null; attempt++) {
                     if (attempt > 1) {
                         step(app.getString(R.string.connect_step_retry, attempt, tries));
@@ -203,7 +206,7 @@ public class UsbConnect {
                     } catch (IOException e) {
                         lastErr = e;
                         cand.close();
-                        if (attempt < tries) Thread.sleep(250L * attempt);
+                        if (attempt < tries) Thread.sleep(150);
                     }
                 }
                 if (t == null) {
