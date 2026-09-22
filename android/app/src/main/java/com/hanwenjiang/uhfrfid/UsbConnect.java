@@ -187,43 +187,51 @@ public class UsbConnect {
         step(app.getString(R.string.connect_step_port));
         Bg.run(() -> {
             try {
-                // 先用库。**只试 2 次就够** ——
-                // 库的 CH34x 初始化是读 0x5F 校验版本，要求第 2 字节是 0x00，
-                // 而这颗 CH341A 固定返回 DF EC，属于**确定性失败**，重试 6 次和 1 次
-                // 结果完全一样，只是白等 5 秒。留一次重试是防 USB 一次性抖动。
-                // 真的过不去就立刻切自驱，那条路才是能用的。
+                // 按芯片选路径，而不是先试库、失败再兜底。
+                //
+                // 库的 CH34x 初始化第一步是读寄存器 0x5F 并**要求第 2 字节是 0x00**，
+                // 这颗 CH341A 固定回 DF EC —— 是**确定性失败**，试几次都一样。
+                // 既然知道必失败，就别浪费那一秒、也别让界面闪出「串口没打开，重试…」
+                // 这种看着像出错的提示。
+                //
+                // 但库支持的**不只是 CH341**（还有 CP210x / FTDI / PL2303 / CDC-ACM），
+                // 所以不能一律走自驱 —— 那样换别的读写器就废了。按 VID 分流：
+                UsbDevice dev = granted.isEmpty() ? null : granted.iterator().next();
+                boolean ch341 = dev != null && dev.getVendorId() == 0x1A86;
+
                 Transport t = null;
                 IOException lastErr = null;
-                final int tries = 2;
-                for (int attempt = 1; attempt <= tries && t == null; attempt++) {
-                    if (attempt > 1) {
-                        step(app.getString(R.string.connect_step_retry, attempt, tries));
-                    }
-                    Transport cand = new SerialTransport(usbManager, granted);
-                    try {
-                        cand.open();
-                        t = cand;
-                    } catch (IOException e) {
-                        lastErr = e;
-                        cand.close();
-                        if (attempt < tries) Thread.sleep(150);
-                    }
-                }
-                if (t == null) {
-                    // 库被版本校验挡死（这颗芯片读 0x5F 回的字节不是 0x00），
-                    // 那就自己驱动 —— 同一套寄存器序列，跳过那次校验。
-                    if (granted.isEmpty()) throw lastErr;
+
+                if (ch341) {
                     step(app.getString(R.string.connect_step_selfdriven));
-                    UsbDevice rawDev = granted.iterator().next();
-                    Ch341RawTransport raw = new Ch341RawTransport(usbManager, rawDev);
+                    Ch341RawTransport raw = new Ch341RawTransport(usbManager, dev);
                     try {
                         raw.open();
                         t = raw;
                     } catch (Exception e2) {
                         raw.close();
-                        throw lastErr;
+                        lastErr = new IOException(e2.getMessage() == null
+                                ? e2.toString() : e2.getMessage());
+                    }
+                } else {
+                    // 其它串口芯片交给库，留一次重试防 USB 一次性抖动
+                    for (int attempt = 1; attempt <= 2 && t == null; attempt++) {
+                        if (attempt > 1) {
+                            step(app.getString(R.string.connect_step_retry, attempt, 2));
+                        }
+                        Transport cand = new SerialTransport(usbManager, granted);
+                        try {
+                            cand.open();
+                            t = cand;
+                        } catch (IOException e) {
+                            lastErr = e;
+                            cand.close();
+                            if (attempt < 2) Thread.sleep(150);
+                        }
                     }
                 }
+                if (t == null) throw lastErr != null ? lastErr
+                        : new IOException(app.getString(R.string.connect_failed, "?"));
 
                 RfidReader reader = RfidSession.get().use(t);
                 if (doReset) {
